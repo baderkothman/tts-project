@@ -1,17 +1,107 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f9fc" />
-    <meta
-      name="description"
-      content="مساحة عمل لتجربة تحويل النص العربي إلى صوت ومقارنة اللهجات والنطق."
-    />
-    <title>مرسم الصوت العربي</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="utf-8" />
+<title>نموذج تحويل النص العربي (السعودي) إلى كلام</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: "Segoe UI", Tahoma, sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+  textarea { width: 100%; min-height: 6rem; font-size: 1.1rem; padding: .6rem; box-sizing: border-box; }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; margin: .75rem 0; align-items: center; }
+  select, button { padding: .4rem .6rem; font-size: 1rem; }
+  button { cursor: pointer; }
+  .panel { margin-top: 1.2rem; }
+  audio { width: 100%; margin-top: .5rem; }
+  .metric { display: inline-block; margin-inline-end: 1.2rem; font-size: .9rem; opacity: .8; }
+  label { font-size: .9rem; }
+  fieldset { border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>تحويل النص العربي (اللهجة السعودية) إلى كلام</h1>
+
+<textarea id="text" placeholder="اكتب نصاً بالعامية السعودية...">وش رايك نطلع نتعشى اليوم؟</textarea>
+
+<div class="row">
+  <fieldset>
+    <legend>الجنس</legend>
+    <label><input type="radio" name="gender" value="male" checked /> ذكر</label>
+    <label><input type="radio" name="gender" value="female" /> أنثى</label>
+  </fieldset>
+  <label>الصوت
+    <select id="voice"><option value="">تلقائي (حسب الجنس)</option></select>
+  </label>
+</div>
+
+<div class="row">
+  <button id="generate">توليد الصوت</button>
+</div>
+
+<div class="panel">
+  <audio id="player" controls></audio>
+  <div id="metrics"></div>
+  <div id="error" style="color:#c0392b"></div>
+</div>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+let allVoices = [];
+
+function selectedGender() {
+  return document.querySelector('input[name="gender"]:checked').value;
+}
+
+function renderVoiceOptions() {
+  const gender = selectedGender();
+  const filtered = allVoices.filter((v) => v.gender === gender);
+  $('#voice').innerHTML = '<option value="">تلقائي (حسب الجنس)</option>';
+  for (const v of filtered) {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = v.name;
+    $('#voice').appendChild(opt);
+  }
+}
+
+async function loadVoices() {
+  allVoices = await (await fetch('/api/voices')).json();
+  renderVoiceOptions();
+}
+
+document.querySelectorAll('input[name="gender"]').forEach((el) =>
+  el.addEventListener('change', renderVoiceOptions)
+);
+
+loadVoices();
+
+$('#generate').addEventListener('click', async () => {
+  $('#error').textContent = '';
+  $('#metrics').innerHTML = '';
+  const body = {
+    text: $('#text').value,
+    voice_id: $('#voice').value || null,
+    gender: $('#voice').value ? null : selectedGender(),
+  };
+  const res = await fetch('/api/speak', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    $('#error').textContent = 'خطأ: ' + (data.detail?.message || data.detail || res.statusText);
+    return;
+  }
+  const bytes = Uint8Array.from(atob(data.audio_base64), (c) => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: data.content_type });
+  $('#player').src = URL.createObjectURL(blob);
+  $('#player').play();
+  $('#metrics').innerHTML =
+    `<span class="metric">الصوت: ${data.voice.name} (${data.voice.gender})</span>` +
+    `<span class="metric">وقت التوليد: ${data.latency.generation_ms.toFixed(0)}ms</span>` +
+    `<span class="metric">مدة الصوت: ${data.latency.audio_duration_ms.toFixed(0)}ms</span>` +
+    `<span class="metric">معامل الزمن الحقيقي: ${data.latency.real_time_factor.toFixed(2)}</span>`;
+});
+</script>
+</body>
 </html>

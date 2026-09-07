@@ -13,10 +13,12 @@ node_modules/
 # Secrets (FR-039)
 .env
 
-# Generated audio — not persisted by default (FR-040)
+# Generated audio — not persisted by default, except durable evidence saved
+# deliberately under docs/audio/ (docs/TTS_MODEL_EVALUATION.md)
 *.mp3
 *.wav
 !docs/audio/*.mp3
+!docs/audio/*.wav
 
 # OS / editor
 .DS_Store

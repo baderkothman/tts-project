@@ -1,7 +1,7 @@
 [project]
-name = "arabic-tts-prototype"
-version = "0.1.0"
-description = "Python-first Arabic text-to-speech prototype with provider abstraction, streaming, and latency instrumentation"
+name = "saudi-tts-prototype"
+version = "0.2.0"
+description = "Python-first Saudi Arabic text-to-speech prototype (male/female voices, latency measurement)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -9,22 +9,12 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "httpx>=0.27",
-    "edge-tts>=7.0",
-    "huggingface_hub>=0.25",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
-]
-# Local MPS/CPU execution for the small Hugging Face models research.md R11
-# clears for it (dialect classifier, diacritizer, G2P) — NOT required for the
-# hosted-Inference-API-first default path (R12), so this stays optional and
-# the credential-free Edge-only install keeps installing fast (T119).
-huggingface-local = [
-    "torch>=2.4",
-    "transformers>=4.45",
 ]
 
 [build-system]

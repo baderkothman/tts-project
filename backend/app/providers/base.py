@@ -1,50 +1,32 @@
-"""The provider abstraction.
+"""The provider abstraction (FR-010).
 
-Every vendor integration lives behind this interface. No module outside
-``backend/app/providers/`` may import a provider SDK or reference a vendor
-response type (Constitution II, SC-010, enforced by
-``tests/contract/test_import_boundaries.py``).
+Deliberately small for this single-provider phase: `synthesize` and
+`list_voices`, per spec.md's own minimal ABC. No `Capabilities` descriptor,
+no streaming contract — those existed in the prior feature to support
+comparing multiple providers with different capabilities; this feature has
+exactly one provider, so that apparatus would be unjustified complexity
+(Constitution VIII).
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
 from typing import Literal
 
-from pydantic import BaseModel
+from backend.app.models.voice import Voice
 
-from backend.app.models.voice import (
-    AudioFormat,
-    Capabilities,
-    EmotionStyle,
-    ProviderStatus,
-    VoiceConfig,
-)
+ErrorKind = Literal["timeout", "auth", "rate_limit", "bad_request", "server"]
 
-ErrorKind = Literal[
-    "timeout", "auth", "rate_limit", "unavailable", "bad_request", "server",
-    "payment_required",
-]
-
-# Kinds worth retrying on a different provider. `auth`, `bad_request`, and
-# `payment_required` are excluded deliberately: retrying a malformed,
-# unauthorized, or plan-restricted request elsewhere burns a second call and
-# hides the real fault. `payment_required` (HTTP 402) is its own kind rather
-# than folded into `bad_request` because it is a distinct, actionable
-# condition — the request was well-formed and the key valid, but the account
-# plan does not permit it (discovered live: ElevenLabs' free tier rejects
-# calls to public "library" voices via the API) — and callers may want to
-# handle "fix your plan" differently from "fix your request".
-RETRYABLE_KINDS: frozenset[str] = frozenset(
-    {"timeout", "rate_limit", "unavailable", "server"}
-)
+# Kinds worth reporting as retryable-in-principle (this phase has no
+# fallback provider to retry against, but the distinction is still useful
+# in the error message and status-code mapping).
+RETRYABLE_KINDS: frozenset[str] = frozenset({"timeout", "rate_limit", "server"})
 
 
 class ProviderError(Exception):
-    """The only exception type a provider may raise outward (PC-06).
+    """The only exception a provider may raise outward.
 
-    ``message`` must never contain credentials or user text (FR-039, FR-040).
+    ``message`` must never contain a credential (Constitution VII).
     """
 
     def __init__(self, provider: str, kind: ErrorKind, message: str) -> None:
@@ -55,21 +37,6 @@ class ProviderError(Exception):
         super().__init__(f"[{provider}/{kind}] {message}")
 
 
-class ProviderRequest(BaseModel):
-    """Normalised synthesis request handed to an adapter.
-
-    Carries no vendor-specific field. Each adapter translates it.
-    """
-
-    text: str
-    voice: VoiceConfig
-    emotion: EmotionStyle = EmotionStyle.NEUTRAL
-    speaking_rate: float | None = None
-    pitch: float | None = None
-    output_format: AudioFormat = AudioFormat.MP3_24KHZ
-    timeout_s: float = 30.0
-
-
 class TTSProvider(ABC):
     """Abstract base every adapter implements."""
 
@@ -77,31 +44,17 @@ class TTSProvider(ABC):
     display_name: str = "Base"
 
     @abstractmethod
-    async def synthesize(self, request: ProviderRequest) -> bytes:
-        """Return complete audio. Raises ProviderError on failure."""
-
-    async def stream(self, request: ProviderRequest) -> AsyncIterator[bytes]:
-        """Yield audio chunks as they arrive.
-
-        A provider declaring ``capabilities().streaming`` MUST override this
-        (PC-03). The default exists so a non-streaming provider is still a
-        valid adapter.
-        """
-        raise NotImplementedError(f"{self.id} does not support streaming")
-        yield b""  # pragma: no cover - makes this an async generator
+    async def synthesize(self, text: str, voice: Voice, *, timeout_s: float) -> bytes:
+        """Return complete audio bytes. Raises ProviderError on failure."""
 
     @abstractmethod
-    async def get_voices(self) -> list[VoiceConfig]:
-        """Voices this provider actually serves (PC-08)."""
+    async def list_voices(self) -> list[Voice]:
+        """Voices this provider actually serves."""
 
-    @abstractmethod
-    def capabilities(self) -> Capabilities:
-        """Pure: no I/O, no exception, stable across calls (PC-01)."""
-
-    def available(self) -> ProviderStatus:
-        """Readiness. Must not raise and must not do network I/O (PC-02)."""
-        return ProviderStatus.AVAILABLE
+    def available(self) -> bool:
+        """Whether this provider is usable right now (e.g. credentials
+        present). Must not raise and must not perform network I/O."""
+        return True
 
     def unavailable_reason(self) -> str | None:
-        """Human-readable explanation, naming the missing variable (FR-024)."""
         return None

@@ -1,88 +1,38 @@
-"""Deterministic test double (research R9).
-
-Gives the offline suite precise control over chunk count, delay, timeout, and
-mid-stream failure — control a recorded-cassette approach cannot offer.
-Registered as a normal `TTSProvider`, so the conformance suite exercises it too.
-"""
+"""Deterministic test double (Constitution VIII — offline-testable by default)."""
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncIterator
+from backend.app.models.voice import Voice
+from backend.app.providers.base import ErrorKind, ProviderError, TTSProvider
 
-from backend.app.models.voice import AudioFormat, Capabilities, ProviderStatus, VoiceConfig
-from backend.app.providers.base import ProviderError, ProviderRequest, TTSProvider
-
-_SILENT_MP3_FRAME = bytes(
-    [0xFF, 0xFB, 0x90, 0x00] + [0x00] * 32
-)  # a syntactically plausible (silent) MP3 frame, not a real encoder
+FAKE_VOICES = [
+    Voice(id="fake:male-1", name="Test Male", provider="fake", gender="male", model="fake-model"),
+    Voice(id="fake:female-1", name="Test Female", provider="fake", gender="female", model="fake-model"),
+]
 
 
 class FakeProvider(TTSProvider):
     id = "fake"
     display_name = "Fake (test double)"
 
-    def __init__(
-        self,
-        *,
-        chunk_count: int = 5,
-        chunk_delay_s: float = 0.0,
-        fail_after_chunks: int | None = None,
-        fail_kind: str = "server",
-        status: ProviderStatus = ProviderStatus.AVAILABLE,
-    ) -> None:
-        self.chunk_count = chunk_count
-        self.chunk_delay_s = chunk_delay_s
-        self.fail_after_chunks = fail_after_chunks
-        self.fail_kind = fail_kind
-        self._status = status
+    def __init__(self, *, fail_kind: ErrorKind | None = None) -> None:
+        self._fail_kind = fail_kind
 
-    def available(self) -> ProviderStatus:
-        return self._status
+    async def list_voices(self) -> list[Voice]:
+        return list(FAKE_VOICES)
 
-    def unavailable_reason(self) -> str | None:
-        if self._status != ProviderStatus.AVAILABLE:
-            return "FakeProvider configured unavailable for testing"
-        return None
+    async def synthesize(self, text: str, voice: Voice, *, timeout_s: float) -> bytes:
+        if self._fail_kind is not None:
+            raise ProviderError(self.id, self._fail_kind, f"induced {self._fail_kind} failure")
+        # A minimal valid WAV (44-byte header + a little silence) so
+        # duration-from-frames logic has something real to measure.
+        import io
+        import wave
 
-    def capabilities(self) -> Capabilities:
-        return Capabilities(
-            streaming=True,
-            ssml=False,
-            phoneme=False,
-            native_emotions=False,
-            prosody_rate=True,
-            prosody_pitch=True,
-            prosody_volume=True,
-            locales=["ar-SA", "ar-EG"],
-            formats=[AudioFormat.MP3_24KHZ],
-            max_chars=5000,
-            requires_credentials=False,
-        )
-
-    async def get_voices(self) -> list[VoiceConfig]:
-        return [
-            VoiceConfig(
-                id="fake:ar-SA-female",
-                provider=self.id,
-                provider_voice_id="fake-voice-1",
-                locale="ar-SA",
-                gender="female",
-                supports_streaming=True,
-            )
-        ]
-
-    async def stream(self, request: ProviderRequest) -> AsyncIterator[bytes]:
-        if self._status != ProviderStatus.AVAILABLE:
-            raise ProviderError(self.id, "unavailable", "provider not available")
-
-        for i in range(self.chunk_count):
-            if self.fail_after_chunks is not None and i >= self.fail_after_chunks:
-                raise ProviderError(self.id, self.fail_kind, "simulated failure")  # type: ignore[arg-type]
-            if self.chunk_delay_s:
-                await asyncio.sleep(self.chunk_delay_s)
-            yield _SILENT_MP3_FRAME
-
-    async def synthesize(self, request: ProviderRequest) -> bytes:
-        chunks = [c async for c in self.stream(request)]
-        return b"".join(chunks)
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(24000)
+            w.writeframes(b"\x00\x00" * 2400)  # 0.1s of silence
+        return buf.getvalue()

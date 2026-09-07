@@ -1,71 +1,76 @@
-"""Latency instrumentation.
+"""Basic latency measurement — three perf_counter marks (FR-007, research.md R3).
 
-Uses ``perf_counter`` because it is monotonic and unaffected by wall-clock
-adjustment, which ``time.time()`` is not (research R6).
-
-Stage marks:
-    T0 client request initiated (client-supplied, optional)
-    T1 server received request
-    T2 preprocessing complete
-    T3 provider request dispatched
-    T4 first audio byte from provider
-    T5 first audio byte written to client
-    T6 client can begin playback (client-reported, optional)
-    T7 synthesis complete
+Deliberately simpler than the prior feature's full T0-T7 streaming trace:
+spec.md asks for generation time, audio duration, and real-time factor only.
 """
 
 from __future__ import annotations
 
+import io
+import wave
 from time import perf_counter
 
-from backend.app.models.tts import LatencyReport
-
-# Bytes per second for MP3 at 48 kbit/s — used to estimate audio duration when
-# the provider does not report it.
-_MP3_48KBPS_BYTES_PER_SEC = 48_000 / 8
+from backend.app.models.speech import LatencyInfo
 
 
 class LatencyTrace:
-    """Collects stage marks for a single synthesis."""
+    def __init__(self) -> None:
+        self._t_request_received = perf_counter()
+        self._t_provider_call_started: float | None = None
+        self._t_audio_received: float | None = None
 
-    def __init__(self, client_t0_ms: float | None = None) -> None:
-        self._marks: dict[str, float] = {}
-        self.client_t0_ms = client_t0_ms
-        self.audio_bytes = 0
-        self.mark("T1")
+    def mark_provider_call_started(self) -> None:
+        self._t_provider_call_started = perf_counter()
 
-    def mark(self, name: str) -> None:
-        """Record a stage boundary. First write wins for first-byte marks."""
-        if name not in self._marks:
-            self._marks[name] = perf_counter()
+    def mark_audio_received(self) -> None:
+        self._t_audio_received = perf_counter()
 
-    def has(self, name: str) -> bool:
-        return name in self._marks
-
-    def _delta_ms(self, start: str, end: str) -> float | None:
-        if start not in self._marks or end not in self._marks:
-            return None
-        return (self._marks[end] - self._marks[start]) * 1000.0
-
-    def audio_duration_ms(self) -> float | None:
-        if not self.audio_bytes:
-            return None
-        return (self.audio_bytes / _MP3_48KBPS_BYTES_PER_SEC) * 1000.0
-
-    def report(self) -> LatencyReport:
-        total = self._delta_ms("T1", "T7")
-        duration = self.audio_duration_ms()
-        rtf: float | None = None
-        if total is not None and duration:
-            rtf = total / duration
-
-        return LatencyReport(
-            preprocessing_ms=self._delta_ms("T1", "T2"),
-            provider_ttfa_ms=self._delta_ms("T3", "T4"),
-            backend_ttfa_ms=self._delta_ms("T1", "T5"),
-            total_generation_ms=total,
-            audio_duration_ms=duration,
-            real_time_factor=rtf,
-            # Only computable when the client supplied its own T0.
-            client_ttfa_ms=None,
+    def report(self, audio_bytes: bytes) -> LatencyInfo:
+        assert self._t_provider_call_started is not None
+        assert self._t_audio_received is not None
+        generation_ms = (self._t_audio_received - self._t_provider_call_started) * 1000.0
+        audio_duration_ms = wav_duration_ms(audio_bytes)
+        real_time_factor = generation_ms / audio_duration_ms if audio_duration_ms > 0 else 0.0
+        return LatencyInfo(
+            generation_ms=generation_ms,
+            audio_duration_ms=audio_duration_ms,
+            real_time_factor=real_time_factor,
         )
+
+
+def wav_duration_ms(audio_bytes: bytes) -> float:
+    """Duration of a WAV byte string, in milliseconds.
+
+    Live-discovered (T032 quickstart run): Groq's WAV response declares both
+    the RIFF and `data` chunk sizes as `0xFFFFFFFF` — an ffmpeg/libavformat
+    streaming-header convention (its `Lavf` muxer tag is visible in the
+    header) meaning "size unknown at write time," not a real byte count.
+    Python's `wave` module trusts that declared size literally, so
+    `getnframes()` returns a nonsense multi-hour figure for a one-second
+    clip. Fixed by computing frame count from the actual bytes present in
+    the `data` subchunk instead of its declared size, falling back to
+    `wave`'s own figure only when it looks sane (below the declared-size
+    sentinel).
+    """
+    with wave.open(io.BytesIO(audio_bytes), "rb") as w:
+        channels = w.getnchannels()
+        sampwidth = w.getsampwidth()
+        rate = w.getframerate()
+        declared_frames = w.getnframes()
+
+    if rate == 0:
+        return 0.0
+
+    frame_size = channels * sampwidth
+    data_index = audio_bytes.find(b"data")
+    if data_index != -1 and frame_size > 0:
+        actual_data_bytes = len(audio_bytes) - data_index - 8
+        actual_frames = actual_data_bytes // frame_size
+        # Only trust the declared count when it doesn't exceed what's
+        # actually present (a real, bounded WAV) — otherwise use the real
+        # byte-derived count.
+        frames = declared_frames if declared_frames <= actual_frames else actual_frames
+    else:
+        frames = declared_frames
+
+    return (frames / rate) * 1000.0
