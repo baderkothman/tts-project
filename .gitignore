@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+
+# Secrets (FR-039)
+.env
+
+# Generated audio — not persisted by default (FR-040)
+*.mp3
+*.wav
+!docs/audio/*.mp3
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

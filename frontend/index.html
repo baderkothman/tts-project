@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<title>نموذج تحويل النص العربي إلى كلام</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: "Segoe UI", Tahoma, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  textarea { width: 100%; min-height: 8rem; font-size: 1.1rem; padding: .6rem; box-sizing: border-box; }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; margin: .75rem 0; }
+  select, button { padding: .4rem .6rem; font-size: 1rem; }
+  button { cursor: pointer; }
+  pre { white-space: pre-wrap; background: color-mix(in srgb, currentColor 6%, transparent); padding: .6rem; border-radius: 6px; }
+  .panel { margin-top: 1.2rem; }
+  audio { width: 100%; margin-top: .5rem; }
+  .metric { display: inline-block; margin-inline-end: 1rem; font-size: .9rem; opacity: .8; }
+</style>
+</head>
+<body>
+<h1>تحويل النص العربي إلى كلام</h1>
+
+<textarea id="text" placeholder="اكتب نصاً عربياً هنا...">مرحباً بكم، اليوم عندنا meeting الساعة 3 PM ومعنا 1,250.50 دولار وتاريخ 27/09/2026.</textarea>
+
+<div class="row">
+  <label>المزوّد <select id="provider"><option value="edge">Edge (بدون مفتاح)</option></select></label>
+  <label>اللهجة
+    <select id="dialect">
+      <option value="">تلقائي</option>
+      <option value="msa">فصحى</option>
+      <option value="gulf">خليجي</option>
+      <option value="egyptian">مصري</option>
+      <option value="levantine">شامي</option>
+      <option value="maghrebi">مغاربي</option>
+    </select>
+  </label>
+  <label>الأسلوب
+    <select id="emotion">
+      <option value="neutral">محايد</option>
+      <option value="happy">سعيد</option>
+      <option value="excited">متحمس</option>
+      <option value="calm">هادئ</option>
+      <option value="warm">دافئ</option>
+      <option value="serious">جاد</option>
+    </select>
+  </label>
+</div>
+
+<div class="row">
+  <button id="generate">توليد الصوت (بث)</button>
+  <button id="previewBtn">معاينة النص المعالج فقط</button>
+</div>
+
+<div class="panel">
+  <audio id="player" controls></audio>
+  <div id="metrics"></div>
+</div>
+
+<div class="panel">
+  <h3>النص الأصلي مقابل المعالَج</h3>
+  <pre id="original"></pre>
+  <pre id="processed"></pre>
+</div>
+
+<div class="panel">
+  <h3>عرض تصحيح النطق (قبل / بعد)</h3>
+  <div id="demoInfo"></div>
+  <div class="row">
+    <div>
+      <p>قبل التصحيح</p>
+      <audio id="demoBefore" controls src="/api/pronunciation/demo/audio?corrected=false"></audio>
+    </div>
+    <div>
+      <p>بعد التصحيح</p>
+      <audio id="demoAfter" controls src="/api/pronunciation/demo/audio?corrected=true"></audio>
+    </div>
+  </div>
+</div>
+
+<script>
+fetch('/api/pronunciation/demo').then(r => r.json()).then(d => {
+  document.getElementById('demoInfo').innerHTML =
+    `<p><b>النص الأصلي:</b> ${d.original_text}</p>` +
+    `<p><b>النص المصحَّح:</b> ${d.corrected_text}</p>` +
+    `<p><b>التقنية:</b> ${d.correction_technique}</p>` +
+    `<p><b>لوحظ على:</b> ${d.provider_observed} / ${d.voice_observed}</p>`;
+}).catch(() => {});
+</script>
+
+<script>
+// This page holds no domain logic (Constitution I): it only posts requests to
+// the Python backend and renders what comes back.
+const $ = (id) => document.getElementById(id);
+
+async function buildRequest() {
+  return {
+    text: $('text').value,
+    provider: $('provider').value,
+    dialect: $('dialect').value || null,
+    emotion: $('emotion').value,
+  };
+}
+
+$('previewBtn').addEventListener('click', async () => {
+  const body = await buildRequest();
+  const res = await fetch('/api/preview', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  $('original').textContent = data.original;
+  $('processed').textContent = data.processed;
+});
+
+$('generate').addEventListener('click', async () => {
+  const body = await buildRequest();
+  const t0 = performance.now();
+  const res = await fetch('/api/tts/stream', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    $('metrics').textContent = 'خطأ: ' + (err.detail?.message || err.detail || res.statusText);
+    return;
+  }
+  const blob = await res.blob();
+  const firstByteMs = (performance.now() - t0).toFixed(0);
+  $('player').src = URL.createObjectURL(blob);
+  $('player').play();
+  $('metrics').innerHTML =
+    `<span class="metric">المزوّد: ${res.headers.get('X-TTS-Provider')}</span>` +
+    `<span class="metric">الصوت: ${res.headers.get('X-TTS-Voice')}</span>` +
+    `<span class="metric">استبدال احتياطي: ${res.headers.get('X-TTS-Used-Fallback')}</span>` +
+    `<span class="metric">وقت الاستجابة: ${firstByteMs}ms</span>`;
+});
+</script>
+</body>
+</html>
