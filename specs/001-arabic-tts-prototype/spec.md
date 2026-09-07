@@ -21,10 +21,13 @@ the supporting evidence is recorded in `docs/PROVIDER_RESEARCH_NOTES.md`.
 - Q: Which speech providers will be used? → A: Three adapters. **Microsoft Edge Neural TTS**
   as the credential-free primary — verified locally to expose 32 Arabic voices over 16
   Arabic locales with genuine chunked streaming, making it the one path that can be
-  executed and benchmarked in every environment. **Azure AI Speech** and **ElevenLabs** as
-  credential-gated adapters, each reporting itself unavailable when its key is absent.
-  Azure and ElevenLabs are the two providers carried through the full written evaluation,
-  with Google Cloud TTS assessed as a third comparison point.
+  executed and benchmarked in every environment. **Groq (Orpheus Arabic — Saudi dialect)**
+  and **ElevenLabs** as credential-gated adapters, each reporting itself unavailable when
+  its key is absent. Groq and ElevenLabs are the two providers carried through the full
+  written evaluation, with OpenAI, Gemini, Hugging Face, and Google Cloud TTS assessed as
+  comparison points. **Azure AI Speech is excluded by explicit project mandate** — not
+  evaluated as a candidate and not used anywhere, including as a fallback — regardless of
+  how it would otherwise have scored; see `docs/TTS_EVALUATION.md`.
 
 - Q: Which Arabic locales are available? → A: The 16 Microsoft Arabic locales — ar-AE,
   ar-BH, ar-DZ, ar-EG, ar-IQ, ar-JO, ar-KW, ar-LB, ar-LY, ar-MA, ar-OM, ar-QA, ar-SA,
@@ -40,11 +43,14 @@ the supporting evidence is recorded in `docs/PROVIDER_RESEARCH_NOTES.md`.
   the text itself**, and per FR-027 claims dialect support only where a provider publishes
   a distinct locale or voice.
 
-- Q: Which providers stream, and how? → A: Edge and Azure return chunked audio over a
-  persistent connection; ElevenLabs offers server-sent-event and WebSocket streaming, with
-  its Flash model documented at roughly 75 ms model latency. Google's Chirp 3: HD is
-  treated as non-streaming. Streaming is therefore a per-adapter declared capability, and
-  any provider lacking it is served through the complete-file path instead.
+- Q: Which providers stream, and how? → A: Edge returns chunked audio over a persistent
+  connection; ElevenLabs offers server-sent-event and WebSocket streaming, with its Flash
+  model documented at roughly 75 ms model latency. Groq's Orpheus Arabic model documents no
+  streaming capability, so its adapter synthesizes the complete (internally chunked, per
+  its 200-character request limit) audio and delivers it as a single unit. Google's
+  Chirp 3: HD is likewise treated as non-streaming. Streaming is therefore a per-adapter
+  declared capability, and any provider lacking it is served through the complete-file path
+  instead.
 
 - Q: What is the benchmark methodology? → A: For each provider, voice and sample, a
   discarded warm-up call is followed by a fixed number of measured repetitions. Stage
@@ -60,12 +66,11 @@ the supporting evidence is recorded in `docs/PROVIDER_RESEARCH_NOTES.md`.
   Opus are exposed where a provider supports them, for lower-latency and
   telephony-oriented use, and are documented for the eventual avatar pipeline.
 
-- Q: What is the frontend choice? → A: A **single static HTML and JavaScript page served by
-  the Python backend**, with no build step. This is chosen over a notebook-style UI
-  framework for one substantive reason: a plain audio element pointed at a streaming
-  endpoint begins playback as the first bytes arrive, so it demonstrates streaming
-  honestly, whereas a framework that hands the player a completed buffer would conceal the
-  very property being demonstrated. The page carries no domain logic.
+- Q: What is the frontend choice? → A: A **React and TypeScript presentation layer built
+  with Vite and served by the Python backend**. React owns interaction state, accessibility,
+  and rendering only; provider routing, dialect resolution, preprocessing, validation, and
+  fallback decisions remain in Python. The primary audio player still consumes the
+  streaming endpoint directly, and the production build is emitted to `frontend/dist`.
 
 - Q: What is the pronunciation correction strategy? → A: **Provider-independent
   orthographic rewriting is primary** — targeted diacritization, phonetic respelling, and
@@ -74,6 +79,36 @@ the supporting evidence is recorded in `docs/PROVIDER_RESEARCH_NOTES.md`.
   at all, so no phoneme-based approach is portable across providers. Markup-based
   correction using SSML phoneme tags is therefore implemented only as a
   capability-gated enhancement for providers that declare support for it.
+
+### Session 2026-09-07 (Hugging Face dialect and pronunciation strategy)
+
+The Edge/Groq/ElevenLabs stack above solved provider independence, streaming, and
+measured latency, but live listening confirmed it has not solved dialect **authenticity**:
+Edge's dialect locales are MSA voices reading dialect words, not dialect speech, and only
+Groq's Orpheus model is genuinely dialect-trained, and only for Gulf/Saudi. This session
+resolves the strategy for closing that gap, again by evidence and inference per this
+project's established practice, deferring only genuine open questions to `/speckit-clarify`.
+
+- Q: Should Hugging Face replace the existing providers? → A: **No — Hugging Face becomes
+  the primary experimentation layer**, sitting ahead of or alongside Edge/Groq/ElevenLabs
+  rather than replacing them. Its job is to solve dialect detection, dialect-aware text
+  processing, diacritization, phonemization, and — only where evidence justifies it —
+  dialect-specific final-audio synthesis. Existing providers remain valid synthesis
+  targets for Hugging-Face-preprocessed text; nothing already integrated is removed.
+- Q: How is "does Hugging Face help" decided? → A: **By the same measured-not-claimed
+  standard as the rest of this project** (Constitution V) — four architectures are
+  compared per dialect (existing TTS alone; HF preprocessing + existing TTS; HF native
+  TTS; HF dialect-specific TTS where one exists) on real generated audio, scored by
+  listening plus measured latency, never by a model card's own claims.
+- Q: Which dialects get full, live-tested HF treatment? → A: **Lebanese/Levantine,
+  Saudi/Gulf, Egyptian, and MSA**, matching the conversational sample sentences this
+  session adds. Iraqi and Maghrebi remain representable as `DialectProfile` records for
+  architectural completeness but are not claimed as live-verified by this feature.
+- Q: Is a paid Hugging Face Inference Endpoint required? → A: **No — treated as an
+  optional, credential-gated path like the existing providers.** Free-tier hosted
+  Inference API usage (or local CPU/MPS execution for small models) is the assumed default
+  so the feature works without a paid commitment; a dedicated endpoint is evaluated and
+  documented, not required.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -223,6 +258,77 @@ and confirm they differ audibly in the described way.
 
 ---
 
+### User Story 6 - Hear a Dialect That Actually Sounds Like That Dialect (Priority: P2)
+
+A user selects Lebanese, Saudi/Gulf, or Egyptian and hears speech with that dialect's own
+vocabulary, rhythm, and pronunciation — not Modern Standard Arabic reading dialect words.
+The user can also submit realistic conversational text for that dialect, including
+Arabic-English code-switching (e.g. "بكرا عندي meeting عالـ 10"), and the dialect's
+vocabulary choices survive unchanged through to the audio.
+
+**Why this priority**: This is the actual product thesis this feature exists to advance —
+Story 3 already lets a user pick a dialect locale, but does not guarantee the *result*
+sounds authentically dialectal. It depends on P1 (working synthesis) already existing.
+
+**Independent Test**: Submit the same set of Lebanese, Gulf, and Egyptian conversational
+sample sentences from this spec's sample set, render each through every architecture
+available for that dialect (existing TTS, HF preprocessing + existing TTS, HF native TTS,
+HF dialect-specific TTS), and confirm the highest-scoring result for each dialect is
+recorded with its listening scores, not merely produced.
+
+**Acceptance Scenarios**:
+
+1. **Given** a Lebanese conversational sample containing dialect vocabulary and an
+   English loanword, **When** speech is requested with dialect=lebanese, **Then** the
+   dialect vocabulary is not rewritten to its MSA equivalent anywhere in the processed
+   text or the resulting audio.
+2. **Given** the same source sentence rendered through every architecture available for a
+   given dialect, **When** the results are compared, **Then** a listening score (
+   naturalness, pronunciation, dialect accuracy, prosody, English-mixing, voice quality)
+   exists for each rendering and the highest-scoring one is named as the recommendation.
+3. **Given** no dialect explicitly selected, **When** speech is requested, **Then** an
+   automatic dialect classifier proposes one with a stated confidence, and the user can
+   see and override that proposal.
+4. **Given** a dialect the automatic classifier cannot resolve more precisely than a
+   broader family (e.g. it detects "Levantine" but the user wants "Lebanese"), **When**
+   the result is shown, **Then** both the classifier's actual label and the application's
+   mapped choice are shown, with confidence — never a fabricated precise label.
+5. **Given** a dialect whose Hugging Face component is unavailable (no credentials, model
+   too large for local hardware, or the hosted endpoint times out), **When** speech is
+   requested, **Then** the system still produces speech through an existing provider and
+   states plainly that Hugging Face processing was skipped and why.
+
+---
+
+### User Story 7 - Compare Raw vs. Hugging-Face-Corrected Speech for Any Text (Priority: P2)
+
+A user submits arbitrary Arabic text (not only the fixed demonstration case from Story 5),
+selects or lets the system detect a dialect, and sees a side-by-side comparison: the
+original text, the resolved dialect and how it was resolved, the processed text, an
+explicit list of what changed, and two playable renderings — raw and corrected.
+
+**Why this priority**: Turns the single fixed pronunciation demo (Story 5) into a general,
+reusable evaluation tool for every sample and every dialect this feature adds — the brief
+identifies this as one of the most important features of the whole prototype.
+
+**Independent Test**: Submit a sample sentence with at least one known pronunciation
+issue, request the comparison, and confirm both renderings are produced, differ audibly,
+and the changes list names the specific corrections applied.
+
+**Acceptance Scenarios**:
+
+1. **Given** any submitted Arabic text, **When** the user requests the raw/corrected
+   comparison, **Then** both a raw and a corrected rendering are produced from the same
+   source text, each independently playable.
+2. **Given** a comparison result, **When** the user views it, **Then** the resolved
+   dialect, whether it came from user selection or detection, the detection confidence
+   (if detected), the processed text, and an itemized list of applied changes are all shown.
+3. **Given** text with no applicable correction, **When** the comparison is requested,
+   **Then** the system states plainly that no correction applied rather than fabricating a
+   difference between the two renderings.
+
+---
+
 ### Edge Cases
 
 - **Empty or whitespace-only text**: rejected with a clear message; no audio produced.
@@ -250,6 +356,21 @@ and confirm they differ audibly in the described way.
   which occurred is inspectable.
 - **Numbers that are identifiers, not quantities** (such as a phone number): spoken as a
   sequence of digits rather than as a single large cardinal quantity.
+- **Hugging Face classifier disagrees with user-selected dialect**: the user's explicit
+  selection wins outright; the classifier's differing output is recorded for transparency
+  but never overrides the request (Story 6, Scenario 4).
+- **Hugging Face model requires more compute/VRAM than the running machine has**: reported
+  as unavailable for local execution; a configured hosted/remote path is attempted instead
+  if available, rather than attempting to load the model and crashing.
+- **Dialect requested that no Hugging Face or existing-provider path can serve**: rejected
+  naming the dialects that are actually servable, consistent with existing
+  provider-dialect rejection behavior (FR-026).
+- **Pronunciation dictionary has conflicting entries for the same token under different
+  dialects**: the entry scoped to the resolved dialect wins; an unscoped entry is used
+  only when no dialect-scoped entry exists.
+- **Hugging Face hosted Inference API cold-starts or rate-limits**: treated the same as any
+  other provider timeout/rate-limit (FR-032, FR-033) — reported and, where a fallback is
+  configured, substituted, never silently retried without bound.
 
 ## Requirements *(mandatory)*
 
@@ -390,6 +511,79 @@ and confirm they differ audibly in the described way.
 - **FR-047**: Setup and run instructions MUST be documented precisely enough to start the
   system from a clean checkout, including which capabilities require credentials.
 
+**Hugging Face dialect and pronunciation experimentation**
+
+- **FR-048**: System MUST resolve a request's dialect either from an explicit user
+  selection, which MUST always take precedence, or from an automatic Hugging Face-based
+  classifier when none is selected, and MUST report which of the two determined it, plus a
+  confidence score whenever the classifier was used.
+- **FR-049**: System MUST represent each supported dialect as a `DialectProfile` record —
+  id, name, region, locale, aliases, normalization rules, assigned pronunciation and
+  diacritization models (if any), and ordered preferred/fallback TTS models — for at
+  least `msa`, `levantine`, `lebanese`, `gulf`, `saudi`, and `egyptian`.
+- **FR-050**: System MUST NOT normalize or rewrite dialect-specific vocabulary into
+  Modern Standard Arabic at any processing stage; dialect word choice present in the
+  input, or introduced by a dialect rule, MUST be preserved through to the text submitted
+  for synthesis.
+- **FR-051**: Where the dialect classifier cannot distinguish a requested sub-dialect from
+  the broader family it was actually trained on (e.g. "Levantine" vs. "Lebanese"), the
+  system MUST report both the classifier's real output and the application's mapped
+  preference, each with its own confidence level, rather than presenting invented
+  precision.
+- **FR-052**: System MUST provide a pronunciation dictionary keyed by token (optionally
+  scoped by dialect) carrying normalized form, diacritized form, phoneme representation,
+  aliases, and an explanatory note, covering at minimum Arabic/Lebanese/Saudi personal
+  names, place names, organization/product names, technical vocabulary, English
+  loanwords, and acronyms.
+- **FR-053**: System MUST provide a side-by-side raw-versus-corrected comparison for any
+  submitted text: original text, resolved dialect (with its source and confidence, per
+  FR-048), processed text, an explicit itemized list of changes applied, and playable
+  audio for both the raw and the corrected rendering.
+- **FR-054**: System MUST evaluate, per supported dialect and using the same input
+  sentences, at minimum these four architectures: (a) an existing provider alone, (b)
+  Hugging Face preprocessing feeding an existing provider, (c) a Hugging Face native TTS
+  model, and (d) a Hugging Face dialect-specific TTS model where one exists — and MUST
+  record which architecture is recommended per dialect, with the measurements that
+  justify it.
+- **FR-055**: System MUST maintain a model registry recording, per candidate Hugging Face
+  model: repository id, task, supported dialects, local-execution support,
+  remote-execution support, streaming capability, GPU requirement, approximate VRAM if
+  known, license, and enabled state; routing MUST read from this registry rather than
+  hardcoding model choices in application logic.
+- **FR-056**: System MUST support at least two of local inference, the Hugging Face
+  hosted Inference API, and a dedicated Inference Endpoint as execution modes, and MUST
+  document the comparison (cold-start latency, time-to-first-audio, cost, control) that
+  justified the mode(s) actually used.
+- **FR-057**: A Hugging Face model or endpoint that is unavailable, times out, requires
+  hardware the running environment lacks, or returns an error MUST be reported as
+  unavailable/degraded through the same graceful-degradation path as any other provider
+  (Constitution VI) — it MUST NOT crash the service or silently substitute without
+  recording that a substitution occurred.
+- **FR-058**: System MUST NOT download a Hugging Face model before recording, in the
+  Model Evaluation Matrix, its task, dialect coverage, license, approximate size, and
+  inference requirements, and confirming those meet this prototype's documented hardware
+  and license constraints.
+- **FR-059**: Where voice/gender metadata is available from a Hugging Face model card or
+  API, the system MUST expose it per voice; where it is not available, the system MUST
+  label that voice's gender as "Unknown/unspecified" rather than inferring it.
+- **FR-060**: Any Hugging Face-based synthesis capability MUST be implemented behind the
+  same single provider interface every other provider uses (FR-021/FR-022); any Hugging
+  Face-based dialect detection, diacritization, G2P, or pronunciation capability MUST be
+  implemented as a separate, independently testable linguistic-processing capability.
+  Neither MAY branch application or routing logic on the fact that a component is
+  Hugging-Face-backed (Constitution II).
+- **FR-061**: Every dialect-authenticity or pronunciation-improvement claim in
+  documentation MUST be backed by a recorded manual listening score (naturalness,
+  pronunciation, dialect accuracy, prosody, English-mixing, voice quality — each out of 5)
+  or an executed automated check, produced on real generated audio for that dialect —
+  never asserted from a model card alone (Constitution V).
+- **FR-062**: The final evaluation MUST explicitly answer, per dialect (Lebanese/
+  Levantine, Saudi/Gulf, Egyptian, MSA): whether Hugging Face measurably improved dialect
+  authenticity, whether it measurably improved pronunciation, which specific model or
+  architecture performed best, and whether Hugging Face should generate final audio or
+  only preprocess text for another provider — each answer traceable to recorded
+  measurements.
+
 ### Key Entities
 
 - **Speech Request**: Text to speak plus the choices governing how — locale or dialect,
@@ -410,6 +604,20 @@ and confirm they differ audibly in the described way.
   set, with the distribution statistics and the run's identifying metadata.
 - **Arabic Sample**: A reusable labelled test text, tagged with the category it exercises
   and the behavior expected of it.
+- **Dialect Profile**: Dialect identity metadata — id, display name, region, locale,
+  aliases, normalization rules, assigned pronunciation/diacritization model, and preferred
+  and fallback TTS models — used to route a resolved dialect to the right processing and
+  synthesis path.
+- **Pronunciation Dictionary Entry**: A token-level pronunciation record — token, dialect
+  scope, normalized form, diacritized form, phoneme representation, aliases, and a note —
+  looked up by exact or aliased token, distinct from a pattern-matched Pronunciation Rule.
+- **Hugging Face Model Config**: A model-registry record — repository id, task, supported
+  dialects, local/remote execution support, streaming capability, GPU requirement,
+  approximate VRAM, license, and enabled state — governing which Hugging Face model serves
+  a given task without an application-logic change.
+- **Dialect Detection Result**: The outcome of resolving a request's dialect — whether it
+  came from explicit user selection or automatic classification, the classifier's raw
+  label and confidence when applicable, and the application's mapped dialect.
 
 ## Success Criteria *(mandatory)*
 
@@ -451,6 +659,26 @@ and confirm they differ audibly in the described way.
   and every capability claim is traceable to a cited source or a recorded observation.
 - **SC-015**: The automated test suite runs to completion without requiring provider
   credentials, and tests that require credentials are skipped rather than failing.
+- **SC-016**: For each of Lebanese/Levantine, Saudi/Gulf, Egyptian, and MSA, at least one
+  architecture combination (existing TTS, HF preprocessing + existing TTS, HF native TTS,
+  or HF dialect-specific TTS) has been rendered, listened to, and scored against every
+  other combination available for that dialect, with the highest-scoring option recorded
+  as the recommendation.
+- **SC-017**: The raw-versus-corrected pronunciation comparison is available for
+  user-submitted text, not only the fixed Story 5 demonstration case, and produces two
+  audibly different, independently playable renderings whenever at least one correction
+  was applied.
+- **SC-018**: No Hugging Face model exceeding the documented size, license, or relevance
+  thresholds appears in the repository's dependency or download footprint without a
+  corresponding Model Evaluation Matrix entry justifying it.
+- **SC-019**: When a selected dialect has no working Hugging Face component available
+  (model unavailable, unmet hardware requirement, or absent credentials), the system still
+  produces speech through an existing provider and states plainly that Hugging Face
+  processing was skipped and why.
+- **SC-020**: The final documentation states, for each of Lebanese/Levantine, Saudi/Gulf,
+  Egyptian, and MSA, an explicit yes/no on measurable dialect improvement and measurable
+  pronunciation improvement, each citing the specific listening scores or benchmark run
+  that supports it.
 
 ## Assumptions
 
@@ -481,3 +709,17 @@ and confirm they differ audibly in the described way.
 - **The avatar pipeline is documented, not built.** Voice activity detection, speech
   recognition, and language model integration are architecture deliverables for this
   feature, not running code.
+- **A Hugging Face account and access token are optional, like the other credential-gated
+  providers.** Free-tier hosted Inference API usage, or local CPU/MPS execution for small
+  enough models, is the assumed default execution mode; a paid dedicated Inference
+  Endpoint is evaluated and documented but never required to satisfy this feature.
+- **Live Hugging Face experimentation is prioritized for Lebanese/Levantine, Saudi/Gulf,
+  Egyptian, and MSA**, matching the conversational sample sentences this feature adds.
+  Iraqi and Maghrebi remain representable as `DialectProfile` records for architectural
+  completeness but are not claimed as live-verified by this feature.
+- **Zero-shot voice cloning is out of the acceptance bar for this feature.** It may be
+  investigated and its findings documented, but no acceptance criterion depends on it
+  working, per the explicit priority of dialect authenticity over voice cloning.
+- **No Azure AI Speech, in any form, for any Hugging Face-adjacent component either** —
+  the existing project-wide ban (Clarifications, Session 2026-09-07) is unchanged and
+  applies equally to any Hugging Face execution mode, hosting choice, or comparison point.

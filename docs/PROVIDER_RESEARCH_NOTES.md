@@ -2,6 +2,18 @@
 
 Raw evidence captured before specification. Full evaluation lives in `TTS_EVALUATION.md`.
 
+## Excluded by mandate: Azure AI Speech
+
+**Not evaluated as a candidate.** The project brief excludes Azure explicitly (individual
+developer, no Azure company/tenant setup) — a policy constraint, not a quality judgment. For
+completeness, and because the brief permits a brief mention here: Azure documents 16 Arabic
+locales, 40 Arabic voices (Standard Neural), full SSML with `<phoneme>` overrides and custom
+lexicon, and $16/1M chars pricing with a 500K-chars/month free tier — it would likely have
+scored well on locale/dialect breadth and phoneme control. It is not used anywhere in this
+project regardless. Microsoft Edge Neural TTS (below) serves the *same* underlying neural
+voice family through a separate, credential-free, non-Azure endpoint — it needs no Azure
+account, tenant, key, or region and is not the Azure Speech product.
+
 ## Verified locally (executed, not claimed)
 
 - `edge-tts` reachable with **no credentials**: 32 Arabic voices across **16 Arabic locales**
@@ -9,18 +21,54 @@ Raw evidence captured before specification. Full evaluation lives in `TTS_EVALUA
   ar-SA, ar-SY, ar-TN, ar-YE) — 2 voices (1F/1M) per locale.
 - Real chunked streaming confirmed: 41 audio chunks, 29,376 bytes, cold TTFA 2485 ms,
   total 3011 ms for a 47-char MSA sentence on `ar-SA-HamedNeural`.
-- The Edge voice list is **identical** to the documented Azure Arabic neural voice list,
-  confirming the same underlying Microsoft neural voice family.
 
-## Azure AI Speech (docs)
+## OpenAI TTS (docs, fetched 2026-09-07)
 
-- 16 Arabic locales, 40 Arabic voices total, all **Standard Neural**.
-- **No Arabic voice supports speaking styles or roles.** None are Neural HD or multilingual.
-  => Emotion for Arabic on Azure/Edge must be synthesised from **prosody** (rate/pitch/volume),
-     not from a `style` attribute.
-- Full SSML: prosody, emphasis, break, `<phoneme>` overrides, custom lexicon.
-- Pricing: $16 / 1M chars standard neural; 500K chars/month free tier.
-  Neural HD reduced Mar 2026 from $30 to $22 / 1M chars.
+- Six stock voices (alloy, echo, fable, onyx, nova, shimmer), all English-optimized.
+  **No Arabic-specific voice.** Arabic input is accepted and produces audio because the TTS
+  model generally follows Whisper-family multilingual training, but this is not a documented
+  Arabic *capability* — quality and dialect behavior are unverified, not merely unmeasured.
+- No Arabic dialect distinction of any kind is published.
+- Source: <https://developers.openai.com/api/docs/guides/text-to-speech>
+
+## Gemini API TTS (docs, fetched 2026-09-07)
+
+- Arabic (`ar`) is explicitly listed in Gemini's supported-language table — genuinely
+  confirmed, not assumed. 30 generic voice names (Zephyr, Puck, Charon, Kore, Fenrir, Leda,
+  …), none Arabic-specific. "TTS models detect the input language automatically" with no
+  documented dialect distinction.
+- Individually accessible via a Google AI Studio API key — no enterprise/tenant setup,
+  unlike Google Cloud TTS (a separate product, see below).
+- Source: <https://ai.google.dev/gemini-api/docs/speech-generation>
+
+## Groq — Orpheus Arabic (docs, fetched 2026-09-07)
+
+- **The only preferred-list provider with a genuinely dialect-trained Arabic voice.**
+  `canopylabs/orpheus-arabic-saudi`: "Authentic Saudi dialect synthesis" — colloquial
+  Saudi/Gulf speech, explicitly distinct from MSA, not a multilingual model with Arabic as
+  one of many inputs.
+- 6 voices: male — Abdullah, Fahad, Sultan; female — Lulwa, Noura, Aisha.
+- Endpoint: `https://api.groq.com/openai/v1/audio/speech` (OpenAI-compatible REST), auth via
+  `GROQ_API_KEY` — individual-developer-simple, no enterprise setup.
+- **Hard constraint**: 200-character limit on `input` per call. Output is WAV only; no
+  streaming or vocal-direction/style-tag support is documented for the Arabic model
+  (unlike Groq's separate English Orpheus model, which does support `[cheerful]`-style tags).
+- Pricing: $40 / 1M characters. No batch processing for Orpheus models currently.
+- Source: <https://console.groq.com/docs/text-to-speech>,
+  <https://console.groq.com/docs/text-to-speech/orpheus>
+
+## Hugging Face Arabic models (docs/model cards, fetched 2026-09-07)
+
+Evaluated as models, not as one monolithic "provider" (per the brief's explicit
+instruction). Representative dialect-aware options found: `Moeeldouma/arabic-tts-xtts-v2`
+(XTTS-v2 fine-tuned across Sudanese/Egyptian/Gulf/Levantine/MSA), `NAMAA-Space/NAMAA-Saudi-TTS`
+(Chatterbox-based, colloquial Saudi), `facebook/mms-tts-ara` (Meta's Massively Multilingual
+Speech Arabic checkpoint), `IbrahimSalah/F5-TTS-Arabic`. All are **self-hosted only** — none
+offers a simple hosted-inference API callable with just an API key the way Groq/ElevenLabs
+do; running any of them requires a GPU, which this implementation environment does not have.
+**Conclusion**: real and improving Arabic dialect coverage exists on Hugging Face, but as a
+**self-hosted Python model**, not a hosted API — not integrated in this prototype's scope,
+recorded here as a genuine future option rather than dismissed.
 
 ## ElevenLabs (docs)
 
@@ -39,16 +87,26 @@ Raw evidence captured before specification. Full evaluation lives in `TTS_EVALUA
 
 ## Architectural consequence
 
-No single provider offers portable Arabic phoneme control:
-Azure has `<phoneme>`, ElevenLabs is alias-only for Arabic, Google Chirp3 has no SSML at all.
-Therefore pronunciation correction MUST be implemented primarily as **provider-independent
-orthographic rewriting in Python** (tashkeel, phonetic respelling, alias substitution),
-with SSML `<phoneme>` used only as a provider-specific enhancement where supported.
+No integrated provider offers portable Arabic phoneme control: Groq's Orpheus Arabic
+accepts no markup at all, ElevenLabs is alias-only for Arabic, and Edge's client escapes
+its own input. (Azure has `<phoneme>` and Google Chirp3 has no SSML at all, for context —
+neither is integrated, so neither changes this conclusion.) Therefore pronunciation
+correction MUST be implemented as **provider-independent orthographic rewriting in Python**
+(tashkeel, phonetic respelling, alias substitution); SSML `<phoneme>` remains a
+capability-gated hook for a future adapter that declares `phoneme=True`, but nothing in the
+current catalogue does.
 
 ## Sources
 
 - https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support
 - https://azure.microsoft.com/en-us/pricing/details/speech/
+- https://developers.openai.com/api/docs/guides/text-to-speech
+- https://ai.google.dev/gemini-api/docs/speech-generation
+- https://console.groq.com/docs/text-to-speech
+- https://console.groq.com/docs/text-to-speech/orpheus
+- https://huggingface.co/Moeeldouma/arabic-tts-xtts-v2
+- https://huggingface.co/NAMAA-Space/NAMAA-Saudi-TTS
+- https://huggingface.co/facebook/mms-tts-ara
 - https://elevenlabs.io/docs/models
 - https://elevenlabs.io/docs/eleven-api/guides/how-to/text-to-speech/pronunciation-dictionaries
 - https://elevenlabs.io/docs/eleven-api/concepts/latency

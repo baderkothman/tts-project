@@ -63,17 +63,77 @@ for that session — held server-side, keyed by a session id, with a TTL.
 
 ## Dialect detection
 
-This prototype requires the dialect to be selected explicitly. Production
-would add a lightweight dialect classifier on the incoming STT transcript
-(or even on raw audio) to auto-route without asking the user — Egyptian,
-Gulf, Levantine, and Maghrebi text have distinguishable lexical markers.
+**Updated** (US6-7, FR-048): this is no longer purely a documented future step — a
+text-in dialect classifier (`IbrahimAmin/marbertv2-arabic-written-dialect-classifier` via
+Hugging Face's hosted Inference API, `text_processing/huggingface/dialect_classifier.py`)
+is live behind `POST /api/dialect/resolve`, with user selection always taking precedence
+(FR-048) and the classifier's real output reported even when overridden (FR-051). What
+remains a *documented, not-built* future step is the **audio-in** variant: for a real
+conversational avatar, the classifier would run on the incoming STT transcript (or the raw
+audio, via a model like `badrex/mms-300m-arabic-dialect-identifier`, research.md R11 —
+rejected for *this* feature only because it's the wrong modality for typed text, not for
+audio) rather than on text the user typed.
+
+## Where Hugging Face sits in the full avatar pipeline
+
+```text
+Microphone → VAD → Streaming Arabic STT → Dialect Detection (HF, audio-in — not built)
+                                                    │
+                                                    ▼
+                                                   LLM
+                                                    │
+                                                    ▼
+                                      Dialect-Aware Text Processing
+                                                    │
+                                                    ▼
+                              Hugging Face Pronunciation Layer (live today, text-in):
+                              dialect_classifier → pronunciation_dictionary
+                              → diacritizer/G2P (structurally ready, pending
+                              license-confirmed models — docs/HF_MODEL_RESEARCH.md)
+                                                    │
+                                                    ▼
+                                              Voice Router
+                                             /            \
+                                HF dialect-specific TTS   Existing TTS
+                                (eligible, not yet          (Edge/Groq/
+                                 listening-confirmed —       ElevenLabs —
+                                 egyptian-tts-chatterbox)     always available)
+                                             \            /
+                                              Streaming TTS
+                                                    │
+                                                    ▼
+                                             Audio / Avatar
+```
+
+**The evidence-based recommendation today (FR-062)**: Hugging Face sits as a
+**preprocessing layer**, not a synthesis replacement — every live `/api/dialect/compare`
+call made during implementation resolved to `architecture_used: "existing_tts"`, because
+no HF-native dialect TTS candidate has yet been listening-confirmed (`docs/DIALECT_
+EVALUATION.md`). This recommendation is provisional, not final: it reflects what has
+actually been measured, and would change the moment a dialect-specific HF TTS model is
+confirmed to outperform the existing baseline on the FR-061 rubric.
 
 ## Pronunciation dictionary storage
 
-Currently a Python list in `dictionary.py` (data, per Constitution III). At
-scale this becomes a versioned, queryable store (even a simple JSON/YAML file
-per locale, or a small database table) so operators can add rules without a
-deploy — the `PronunciationRule` schema is already storage-agnostic.
+Currently a Python list in `dictionary.py` (data, per Constitution III), extended by a
+second, token-level list in `data/pronunciation_dictionary.py` (FR-052, dialect-scoped
+names/places/loanwords, distinct from the pattern-matched rules in `dictionary.py`). At
+scale both become a versioned, queryable store (even a simple JSON/YAML file per locale, or
+a small database table) so operators can add entries without a deploy — both schemas are
+already storage-agnostic Pydantic models.
+
+## Hugging Face execution mode at scale
+
+The prototype defaults to the hosted Inference API (research.md R12) specifically because
+it needs no warm capacity commitment while candidate models are still being evaluated. At
+production scale, once the FR-054 architecture comparison has picked a winning model per
+dialect, a **dedicated Inference Endpoint** (`providers/huggingface/endpoint.py`, currently
+a documented stub) removes the hosted API's cold-start variance and per-call queueing,
+which is the same reasoning already applied in `docs/BENCHMARK_RESULTS.md` to Groq's
+observed cold-start and rate-limit behavior. Local MPS/CPU execution remains viable only
+for the smallest models (the classifier, diacritizer, G2P) and only where per-request
+latency budget tolerates loading a model into a shared process rather than a dedicated
+inference server.
 
 ## Fallback TTS and caching
 
@@ -84,6 +144,16 @@ demonstrates the pattern (`tts_service.py`); production would add:
   entirely.
 - Circuit breakers per provider so a degraded provider is temporarily removed
   from routing rather than retried on every request.
+- **A worked, real example of why this matters**: live-testing this prototype
+  against Groq's Orpheus Arabic model found a genuine, vendor-undocumented
+  10 requests/minute limit (`docs/BENCHMARK_RESULTS.md`) — a single busy
+  conversational session could exhaust it alone. The adapter-level fix here
+  (one bounded, `Retry-After`-honoring retry — `groq.py`) is the right amount
+  of resilience for a prototype, but is not sufficient at production scale:
+  a production deployment needs a **per-provider outbound token bucket**
+  sized to the vendor's documented (or, as here, empirically discovered)
+  ceiling, so requests queue or shed gracefully *before* hitting 429 at all,
+  rather than reacting to it after the fact per-request.
 
 ## Observability and distributed tracing
 

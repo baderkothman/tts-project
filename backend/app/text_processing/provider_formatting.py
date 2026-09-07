@@ -5,12 +5,13 @@ markup-like user text can never alter the synthesis instructions sent to a
 provider — injection is prevented by construction, not by filtering
 (Constitution VII, FR-041).
 
-No phoneme mechanism is portable across providers (research R4): Azure has
-Arabic <phoneme>, ElevenLabs restricts phonemes to English, Google's Chirp 3
-accepts no SSML, and the Edge client escapes its own input and accepts none.
-So phoneme markup is emitted ONLY when the target provider's Capabilities
-declare `phoneme=True`; everywhere else, correction stays in the orthographic
-rewriting already applied by `pronunciation.py`.
+No phoneme mechanism is portable across providers (research R4): ElevenLabs
+restricts phonemes to English, Groq's Orpheus Arabic model accepts no markup
+at all, and the Edge client escapes its own input and accepts none. So
+phoneme markup is emitted ONLY when the target provider's Capabilities
+declare `phoneme=True` (none in this project's catalogue currently do);
+everywhere else, correction stays in the orthographic rewriting already
+applied by `pronunciation.py`.
 """
 
 from __future__ import annotations
@@ -24,8 +25,11 @@ from backend.app.models.voice import Capabilities, EmotionStyle, VoiceConfig
 # every style is expressed as a prosody shift, never as an emotion attribute.
 # Kept as numbers (not provider-formatted strings) because providers disagree
 # on units: edge-tts requires pitch in whole Hz while rate/volume are percent
-# (verified against edge_tts.data_classes.TTSConfig's own validation regexes);
-# Azure SSML accepts percent for all three. Each adapter formats these itself.
+# (verified against edge_tts.data_classes.TTSConfig's own validation regexes).
+# Each adapter formats these itself; `build_ssml` below is currently unused
+# by any adapter in the catalogue (no provider both accepts SSML and lacks a
+# credential gate) but is kept as the capability-gated SSML path for a future
+# SSML-capable adapter (Constitution II — providers vary, the interface does not).
 _STYLE_PROSODY: dict[EmotionStyle, tuple[float, float, float]] = {
     EmotionStyle.NEUTRAL: (0, 0, 0),
     EmotionStyle.HAPPY: (8, 6, 0),

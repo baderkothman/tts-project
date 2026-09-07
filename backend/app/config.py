@@ -17,10 +17,12 @@ class Settings(BaseSettings):
     )
 
     # --- Credentials (optional; absence disables a provider, never crashes) ---
-    azure_speech_key: str | None = None
-    azure_speech_region: str | None = None
+    groq_api_key: str | None = None
     elevenlabs_api_key: str | None = None
     elevenlabs_model_id: str = "eleven_flash_v2_5"
+    # Hugging Face hosted Inference API token (research.md R12 — optional,
+    # same credential-gated-but-not-required pattern as Groq/ElevenLabs).
+    hf_token: str | None = None
 
     # --- Service behaviour ---
     tts_default_provider: str = "edge"
@@ -28,11 +30,14 @@ class Settings(BaseSettings):
     tts_request_timeout_s: float = 30.0
     tts_max_input_chars: int = 5000
 
-    def has_azure(self) -> bool:
-        return bool(self.azure_speech_key and self.azure_speech_region)
+    def has_groq(self) -> bool:
+        return bool(self.groq_api_key)
 
     def has_elevenlabs(self) -> bool:
         return bool(self.elevenlabs_api_key)
+
+    def has_huggingface(self) -> bool:
+        return bool(self.hf_token)
 
 
 @lru_cache

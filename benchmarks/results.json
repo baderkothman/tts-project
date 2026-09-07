@@ -564,5 +564,1681 @@
         }
       }
     ]
+  },
+  {
+    "run_id": "25477709",
+    "started_at": "2026-09-07T10:54:18.089563Z",
+    "finished_at": "2026-09-07T10:54:35.126420Z",
+    "provider": "groq",
+    "voice_id": "groq:ar-SA-abdullah",
+    "sample_set": [
+      "msa-1",
+      "msa-2",
+      "dialect-egyptian-1",
+      "dialect-gulf-1",
+      "pronunciation-1",
+      "numbers-1",
+      "dates-1",
+      "currencies-1",
+      "abbreviations-1",
+      "code-switching-1",
+      "emotion-1"
+    ],
+    "repetitions": 3,
+    "warmup_discarded": true,
+    "environment": {
+      "python": "3.12"
+    },
+    "results": [
+      {
+        "sample_id": "msa-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.3010000000358559,
+            "max_ms": 0.44929100113222376,
+            "mean_ms": 0.3978053337050369,
+            "median_ms": 0.44312499994703103,
+            "p95_ms": 0.44929100113222376,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 774.2236249996495,
+            "max_ms": 1047.246542000721,
+            "mean_ms": 886.3815416668027,
+            "median_ms": 837.6744580000377,
+            "p95_ms": 1047.246542000721,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 774.7062499984168,
+            "max_ms": 1047.591624999768,
+            "mean_ms": 886.8241109994415,
+            "median_ms": 838.1744580001396,
+            "p95_ms": 1047.591624999768,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 774.7074159997283,
+            "max_ms": 1047.5926660001278,
+            "mean_ms": 886.8251383337338,
+            "median_ms": 838.1753330013453,
+            "p95_ms": 1047.5926660001278,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.02813877653610006,
+          "max_ms": 0.038050463078883504,
+          "mean_ms": 0.032211095284232716,
+          "median_ms": 0.03044404623771458,
+          "p95_ms": 0.038050463078883504,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "msa-2",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.4458330004126765,
+            "max_ms": 0.4836249991058139,
+            "mean_ms": 0.4592636663195056,
+            "median_ms": 0.44833299944002647,
+            "p95_ms": 0.4836249991058139,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 759.2447499991977,
+            "max_ms": 795.5533339991234,
+            "mean_ms": 776.9474586657452,
+            "median_ms": 776.0442919989146,
+            "p95_ms": 795.5533339991234,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 759.7228329996142,
+            "max_ms": 796.036957999604,
+            "mean_ms": 777.4450553327673,
+            "median_ms": 776.5753749990836,
+            "p95_ms": 796.036957999604,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 759.7233329997835,
+            "max_ms": 796.0380829990754,
+            "mean_ms": 777.4459856658117,
+            "median_ms": 776.5765409985761,
+            "p95_ms": 796.0380829990754,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.026967638868832165,
+          "max_ms": 0.0282566911080545,
+          "mean_ms": 0.0275967337987036,
+          "median_ms": 0.02756587141922414,
+          "p95_ms": 0.0282566911080545,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "dialect-egyptian-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.31183400096779224,
+            "max_ms": 0.31183400096779224,
+            "mean_ms": 0.31183400096779224,
+            "median_ms": 0.31183400096779224,
+            "p95_ms": 0.31183400096779224,
+            "count": 1
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 805.0605839998752,
+            "max_ms": 805.0605839998752,
+            "mean_ms": 805.0605839998752,
+            "median_ms": 805.0605839998752,
+            "p95_ms": 805.0605839998752,
+            "count": 1
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 805.4012500015233,
+            "max_ms": 805.4012500015233,
+            "mean_ms": 805.4012500015233,
+            "median_ms": 805.4012500015233,
+            "p95_ms": 805.4012500015233,
+            "count": 1
+          },
+          "total_generation_ms": {
+            "min_ms": 805.4016670012061,
+            "max_ms": 805.4016670012061,
+            "mean_ms": 805.4016670012061,
+            "median_ms": 805.4016670012061,
+            "p95_ms": 805.4016670012061,
+            "count": 1
+          }
+        },
+        "failures": 2,
+        "real_time_factor": {
+          "min_ms": 0.04057098482081468,
+          "max_ms": 0.04057098482081468,
+          "mean_ms": 0.04057098482081468,
+          "median_ms": 0.04057098482081468,
+          "p95_ms": 0.04057098482081468,
+          "count": 1
+        }
+      },
+      {
+        "sample_id": "dialect-gulf-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "pronunciation-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "numbers-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dates-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "currencies-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "abbreviations-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.5081660001451382,
+            "max_ms": 0.5081660001451382,
+            "mean_ms": 0.5081660001451382,
+            "median_ms": 0.5081660001451382,
+            "p95_ms": 0.5081660001451382,
+            "count": 1
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 1145.9979579994979,
+            "max_ms": 1145.9979579994979,
+            "mean_ms": 1145.9979579994979,
+            "median_ms": 1145.9979579994979,
+            "p95_ms": 1145.9979579994979,
+            "count": 1
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 1146.5355410000484,
+            "max_ms": 1146.5355410000484,
+            "mean_ms": 1146.5355410000484,
+            "median_ms": 1146.5355410000484,
+            "p95_ms": 1146.5355410000484,
+            "count": 1
+          },
+          "total_generation_ms": {
+            "min_ms": 1146.536082998864,
+            "max_ms": 1146.536082998864,
+            "mean_ms": 1146.536082998864,
+            "median_ms": 1146.536082998864,
+            "p95_ms": 1146.536082998864,
+            "count": 1
+          }
+        },
+        "failures": 2,
+        "real_time_factor": {
+          "min_ms": 0.025585660348842132,
+          "max_ms": 0.025585660348842132,
+          "mean_ms": 0.025585660348842132,
+          "median_ms": 0.025585660348842132,
+          "p95_ms": 0.025585660348842132,
+          "count": 1
+        }
+      },
+      {
+        "sample_id": "code-switching-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "emotion-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      }
+    ]
+  },
+  {
+    "run_id": "315bd286",
+    "started_at": "2026-09-07T10:57:32.355011Z",
+    "finished_at": "2026-09-07T11:03:20.171738Z",
+    "provider": "groq",
+    "voice_id": "groq:ar-SA-abdullah",
+    "sample_set": [
+      "msa-1",
+      "msa-2",
+      "dialect-egyptian-1",
+      "dialect-gulf-1",
+      "pronunciation-1",
+      "numbers-1",
+      "dates-1",
+      "currencies-1",
+      "abbreviations-1",
+      "code-switching-1",
+      "emotion-1"
+    ],
+    "repetitions": 3,
+    "warmup_discarded": true,
+    "environment": {
+      "python": "3.12"
+    },
+    "results": [
+      {
+        "sample_id": "msa-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.1950839996425202,
+            "max_ms": 0.3717089985002531,
+            "mean_ms": 0.29130599917455885,
+            "median_ms": 0.3071249993809033,
+            "p95_ms": 0.3717089985002531,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 764.7680410009343,
+            "max_ms": 809.7327499999665,
+            "mean_ms": 781.4281666669558,
+            "median_ms": 769.7837089999666,
+            "p95_ms": 809.7327499999665,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 764.9925839996286,
+            "max_ms": 810.1452499995503,
+            "mean_ms": 781.7541253328576,
+            "median_ms": 770.1245419993938,
+            "p95_ms": 810.1452499995503,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 764.993124999819,
+            "max_ms": 810.1476249994448,
+            "mean_ms": 781.7552639996089,
+            "median_ms": 770.1250419995631,
+            "p95_ms": 810.1476249994448,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.02778593589199657,
+          "max_ms": 0.029426029117965182,
+          "mean_ms": 0.028394767140853885,
+          "median_ms": 0.027972336412599906,
+          "p95_ms": 0.029426029117965182,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "msa-2",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.3147919996990822,
+            "max_ms": 0.42462499914108776,
+            "mean_ms": 0.38106966591537156,
+            "median_ms": 0.40379199890594464,
+            "p95_ms": 0.42462499914108776,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 800.3432080004131,
+            "max_ms": 938.320917000965,
+            "mean_ms": 864.0851113335278,
+            "median_ms": 853.5912089992053,
+            "p95_ms": 938.320917000965,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 800.7822090003174,
+            "max_ms": 938.6757920001401,
+            "mean_ms": 864.504347666904,
+            "median_ms": 854.0550420002546,
+            "p95_ms": 938.6757920001401,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 800.7828749996406,
+            "max_ms": 938.6768339991249,
+            "mean_ms": 864.505319666326,
+            "median_ms": 854.0562500002125,
+            "p95_ms": 938.6768339991249,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.028425115364123787,
+          "max_ms": 0.03331988998399544,
+          "mean_ms": 0.030687049151026182,
+          "median_ms": 0.030316142104959323,
+          "p95_ms": 0.03331988998399544,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "dialect-egyptian-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.30775000050198287,
+            "max_ms": 0.43650000043271575,
+            "mean_ms": 0.35380566684276954,
+            "median_ms": 0.31716699959360994,
+            "p95_ms": 0.43650000043271575,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 693.0120420001913,
+            "max_ms": 6924.390958000004,
+            "mean_ms": 4817.1697916665535,
+            "median_ms": 6834.106374999465,
+            "p95_ms": 6924.390958000004,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 693.35004200002,
+            "max_ms": 6924.750874999518,
+            "mean_ms": 4817.559861333696,
+            "median_ms": 6834.578667001551,
+            "p95_ms": 6924.750874999518,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 693.3507920002739,
+            "max_ms": 6924.75179199937,
+            "mean_ms": 4817.560653000328,
+            "median_ms": 6834.57937500134,
+            "p95_ms": 6924.75179199937,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.03492657838973758,
+          "max_ms": 0.34882470617073474,
+          "mean_ms": 0.24267789369492038,
+          "median_ms": 0.34428239652428877,
+          "p95_ms": 0.34882470617073474,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "dialect-gulf-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.20949999998265412,
+            "max_ms": 0.44012500075041316,
+            "mean_ms": 0.362791666702833,
+            "median_ms": 0.4387499993754318,
+            "p95_ms": 0.44012500075041316,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 6795.696332999796,
+            "max_ms": 7412.7477499987435,
+            "mean_ms": 7007.07904166605,
+            "median_ms": 6812.793041999612,
+            "p95_ms": 7412.7477499987435,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 6796.177374999388,
+            "max_ms": 7412.993292000465,
+            "mean_ms": 7007.4795140002,
+            "median_ms": 6813.267875000747,
+            "p95_ms": 7412.993292000465,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 6796.17829199924,
+            "max_ms": 7412.994374999471,
+            "mean_ms": 7007.480430665964,
+            "median_ms": 6813.268624999182,
+            "p95_ms": 7412.994374999471,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.35375266549835555,
+          "max_ms": 0.3858589941007793,
+          "mean_ms": 0.3647513020213047,
+          "median_ms": 0.3546422464647792,
+          "p95_ms": 0.3858589941007793,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "pronunciation-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.3882080000039423,
+            "max_ms": 0.4199579998385161,
+            "mean_ms": 0.3999860000476474,
+            "median_ms": 0.3917920003004838,
+            "p95_ms": 0.4199579998385161,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 6893.04466700014,
+            "max_ms": 6937.836958999469,
+            "mean_ms": 6912.921777999752,
+            "median_ms": 6907.883707999645,
+            "p95_ms": 6937.836958999469,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 6893.5117080000055,
+            "max_ms": 6938.258624999435,
+            "mean_ms": 6913.3624443335675,
+            "median_ms": 6908.3170000012615,
+            "p95_ms": 6938.258624999435,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 6893.5126249998575,
+            "max_ms": 6938.259082999139,
+            "mean_ms": 6913.363222332919,
+            "median_ms": 6908.31795899976,
+            "p95_ms": 6938.259082999139,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.32621717603911304,
+          "max_ms": 0.3283346833188329,
+          "mean_ms": 0.3271565528353775,
+          "median_ms": 0.3269177991481864,
+          "p95_ms": 0.3283346833188329,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "numbers-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.3778749996854458,
+            "max_ms": 0.6555420004588086,
+            "mean_ms": 0.5309306664761001,
+            "median_ms": 0.5593749992840458,
+            "p95_ms": 0.6555420004588086,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 7699.4849589991645,
+            "max_ms": 8061.048542000208,
+            "mean_ms": 7876.324889332561,
+            "median_ms": 7868.441166998309,
+            "p95_ms": 8061.048542000208,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 7700.179542000114,
+            "max_ms": 8061.64416700085,
+            "mean_ms": 7876.893417000247,
+            "median_ms": 7868.856541999776,
+            "p95_ms": 8061.64416700085,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 7700.1806250009395,
+            "max_ms": 8061.644875000638,
+            "mean_ms": 7876.8943750007265,
+            "median_ms": 7868.857625000601,
+            "p95_ms": 8061.644875000638,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.11793752967515772,
+          "max_ms": 0.12347378950943179,
+          "mean_ms": 0.1206441133450188,
+          "median_ms": 0.1205210208504669,
+          "p95_ms": 0.12347378950943179,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "dates-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.27216700073040556,
+            "max_ms": 0.613375001194072,
+            "mean_ms": 0.43433333424521453,
+            "median_ms": 0.41745800081116613,
+            "p95_ms": 0.613375001194072,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 7641.279041999951,
+            "max_ms": 7952.580582999872,
+            "mean_ms": 7745.118527999996,
+            "median_ms": 7641.495959000167,
+            "p95_ms": 7952.580582999872,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 7641.58766699984,
+            "max_ms": 7953.227209000033,
+            "mean_ms": 7745.590264000081,
+            "median_ms": 7641.95591600037,
+            "p95_ms": 7953.227209000033,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 7641.588833999776,
+            "max_ms": 7953.227750000224,
+            "mean_ms": 7745.591180666452,
+            "median_ms": 7641.956957999355,
+            "p95_ms": 7953.227750000224,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.1256599145010515,
+          "max_ms": 0.1307845712171495,
+          "mean_ms": 0.1273701512429049,
+          "median_ms": 0.1256659680105137,
+          "p95_ms": 0.1307845712171495,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "currencies-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.5737499996030238,
+            "max_ms": 0.65987500056508,
+            "mean_ms": 0.6284999999479624,
+            "median_ms": 0.6518749996757833,
+            "p95_ms": 0.65987500056508,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 7355.169374999605,
+            "max_ms": 7680.7772499996645,
+            "mean_ms": 7476.878611333329,
+            "median_ms": 7394.689209000717,
+            "p95_ms": 7680.7772499996645,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 7355.782832999466,
+            "max_ms": 7681.477667001673,
+            "mean_ms": 7477.547736333388,
+            "median_ms": 7395.382708999023,
+            "p95_ms": 7681.477667001673,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 7355.783957998938,
+            "max_ms": 7681.478792001144,
+            "mean_ms": 7477.548819666481,
+            "median_ms": 7395.383708999361,
+            "p95_ms": 7681.478792001144,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.1473170124102728,
+          "max_ms": 0.15383982359894144,
+          "mean_ms": 0.14975564243799488,
+          "median_ms": 0.14811009130477043,
+          "p95_ms": 0.15383982359894144,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "abbreviations-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "code-switching-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "emotion-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 3,
+        "stages": {},
+        "failures": 3,
+        "real_time_factor": null
+      }
+    ]
+  },
+  {
+    "run_id": "f708b20a",
+    "started_at": "2026-09-07T11:03:54.638429Z",
+    "finished_at": "2026-09-07T11:09:37.066183Z",
+    "provider": "groq",
+    "voice_id": "groq:ar-SA-abdullah",
+    "sample_set": [
+      "msa-1",
+      "msa-2",
+      "dialect-egyptian-1",
+      "dialect-gulf-1",
+      "pronunciation-1",
+      "numbers-1",
+      "dates-1",
+      "currencies-1",
+      "abbreviations-1",
+      "code-switching-1",
+      "emotion-1"
+    ],
+    "repetitions": 1,
+    "warmup_discarded": true,
+    "environment": {
+      "python": "3.12"
+    },
+    "results": [
+      {
+        "sample_id": "msa-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "msa-2",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dialect-egyptian-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dialect-gulf-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "pronunciation-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "numbers-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dates-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "currencies-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "abbreviations-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "code-switching-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "emotion-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      }
+    ]
+  },
+  {
+    "run_id": "d5255052",
+    "started_at": "2026-09-07T11:11:31.202071Z",
+    "finished_at": "2026-09-07T11:14:21.740895Z",
+    "provider": "groq",
+    "voice_id": "groq:ar-SA-abdullah",
+    "sample_set": [
+      "msa-1",
+      "msa-2",
+      "dialect-egyptian-1",
+      "dialect-gulf-1",
+      "pronunciation-1",
+      "numbers-1",
+      "dates-1",
+      "currencies-1",
+      "abbreviations-1",
+      "code-switching-1",
+      "emotion-1"
+    ],
+    "repetitions": 1,
+    "warmup_discarded": false,
+    "environment": {
+      "python": "3.12"
+    },
+    "results": [
+      {
+        "sample_id": "msa-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "msa-2",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dialect-egyptian-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dialect-gulf-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "pronunciation-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "numbers-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dates-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "currencies-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "abbreviations-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "code-switching-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "emotion-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      }
+    ]
+  },
+  {
+    "run_id": "edd71936",
+    "started_at": "2026-09-07T11:14:51.970247Z",
+    "finished_at": "2026-09-07T11:17:42.332102Z",
+    "provider": "groq",
+    "voice_id": "groq:ar-SA-abdullah",
+    "sample_set": [
+      "msa-1",
+      "msa-2",
+      "dialect-egyptian-1",
+      "dialect-gulf-1",
+      "pronunciation-1",
+      "numbers-1",
+      "dates-1",
+      "currencies-1",
+      "abbreviations-1",
+      "code-switching-1",
+      "emotion-1"
+    ],
+    "repetitions": 1,
+    "warmup_discarded": false,
+    "environment": {
+      "python": "3.12"
+    },
+    "results": [
+      {
+        "sample_id": "msa-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "msa-2",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dialect-egyptian-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dialect-gulf-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "pronunciation-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "numbers-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "dates-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "currencies-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "abbreviations-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "code-switching-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      },
+      {
+        "sample_id": "emotion-1",
+        "provider": "groq",
+        "voice_id": "groq:ar-SA-abdullah",
+        "repetitions": 1,
+        "stages": {},
+        "failures": 1,
+        "real_time_factor": null
+      }
+    ]
+  },
+  {
+    "run_id": "573aa958",
+    "started_at": "2026-09-07T11:40:44.445481Z",
+    "finished_at": "2026-09-07T11:41:21.029371Z",
+    "provider": "elevenlabs",
+    "voice_id": "elevenlabs:sarah",
+    "sample_set": [
+      "msa-1",
+      "msa-2",
+      "dialect-egyptian-1",
+      "dialect-gulf-1",
+      "pronunciation-1",
+      "numbers-1",
+      "dates-1",
+      "currencies-1",
+      "abbreviations-1",
+      "code-switching-1",
+      "emotion-1"
+    ],
+    "repetitions": 3,
+    "warmup_discarded": true,
+    "environment": {
+      "python": "3.12"
+    },
+    "results": [
+      {
+        "sample_id": "msa-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.3364589992997935,
+            "max_ms": 0.4124169990973314,
+            "mean_ms": 0.38437533294199966,
+            "median_ms": 0.40425000042887405,
+            "p95_ms": 0.4124169990973314,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 517.3352919991885,
+            "max_ms": 552.6050409989693,
+            "mean_ms": 531.1252776664332,
+            "median_ms": 523.4355000011419,
+            "p95_ms": 552.6050409989693,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 720.8957919992827,
+            "max_ms": 834.3636249992414,
+            "mean_ms": 761.1142083327044,
+            "median_ms": 728.0832079995889,
+            "p95_ms": 834.3636249992414,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 720.8967089991347,
+            "max_ms": 834.3646670000453,
+            "mean_ms": 761.115222333198,
+            "median_ms": 728.0842910004139,
+            "p95_ms": 834.3646670000453,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.08338725403394591,
+          "max_ms": 0.09349845921969767,
+          "mean_ms": 0.0877297060299723,
+          "median_ms": 0.08630340483627333,
+          "p95_ms": 0.09349845921969767,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "msa-2",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.19295799938845448,
+            "max_ms": 0.3429160005907761,
+            "mean_ms": 0.27888866619226366,
+            "median_ms": 0.30079199859756045,
+            "p95_ms": 0.3429160005907761,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 507.4535420008033,
+            "max_ms": 611.2300829991,
+            "mean_ms": 553.1066806664361,
+            "median_ms": 540.6364169994049,
+            "p95_ms": 611.2300829991,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 767.2489159995166,
+            "max_ms": 884.3734999991284,
+            "mean_ms": 823.4200969994466,
+            "median_ms": 818.6378749996948,
+            "p95_ms": 884.3734999991284,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 767.2499580003205,
+            "max_ms": 884.3742909994035,
+            "mean_ms": 823.4209026662332,
+            "median_ms": 818.6384589989757,
+            "p95_ms": 884.3742909994035,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.07289093273801259,
+          "max_ms": 0.08630146777256925,
+          "mean_ms": 0.0796930172637607,
+          "median_ms": 0.07988665128070024,
+          "p95_ms": 0.08630146777256925,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "dialect-egyptian-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.23104200045054313,
+            "max_ms": 0.29395799901976716,
+            "mean_ms": 0.25974999941051163,
+            "median_ms": 0.25424999876122456,
+            "p95_ms": 0.29395799901976716,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 488.123707998966,
+            "max_ms": 570.8300000005693,
+            "mean_ms": 522.49012466685,
+            "median_ms": 508.5166660010145,
+            "p95_ms": 570.8300000005693,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 663.6251249983616,
+            "max_ms": 773.5672920007346,
+            "mean_ms": 710.4041389999717,
+            "median_ms": 694.020000000819,
+            "p95_ms": 773.5672920007346,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 663.6261669991654,
+            "max_ms": 773.567959000502,
+            "mean_ms": 710.4048893331006,
+            "median_ms": 694.0205419996346,
+            "p95_ms": 773.567959000502,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.08808485112319261,
+          "max_ms": 0.10770426866856203,
+          "mean_ms": 0.09667134922109392,
+          "median_ms": 0.09422492787152711,
+          "p95_ms": 0.10770426866856203,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "dialect-gulf-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.2523339990148088,
+            "max_ms": 0.423166999098612,
+            "mean_ms": 0.3185419991496019,
+            "median_ms": 0.2801249993353849,
+            "p95_ms": 0.423166999098612,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 520.8897080010502,
+            "max_ms": 547.4777500003256,
+            "mean_ms": 535.3542080004748,
+            "median_ms": 537.6951660000486,
+            "p95_ms": 547.4777500003256,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 703.4696669998084,
+            "max_ms": 808.6047499982669,
+            "mean_ms": 740.1816389992746,
+            "median_ms": 708.4704999997484,
+            "p95_ms": 808.6047499982669,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 703.4704999987298,
+            "max_ms": 808.605832999092,
+            "mean_ms": 740.1825416660964,
+            "median_ms": 708.4712920004677,
+            "p95_ms": 808.605832999092,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.10964030963431902,
+          "max_ms": 0.1288238495524429,
+          "mean_ms": 0.11711165795859065,
+          "median_ms": 0.11287081468901002,
+          "p95_ms": 0.1288238495524429,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "pronunciation-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.26079199960804544,
+            "max_ms": 0.4158750016358681,
+            "mean_ms": 0.3442083337480047,
+            "median_ms": 0.3559580000001006,
+            "p95_ms": 0.4158750016358681,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 533.0217909995554,
+            "max_ms": 606.9092920006369,
+            "mean_ms": 565.4521943330716,
+            "median_ms": 556.4254999990226,
+            "p95_ms": 606.9092920006369,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 710.1389170002221,
+            "max_ms": 861.6936670005089,
+            "mean_ms": 778.9446253336791,
+            "median_ms": 765.0012920003064,
+            "p95_ms": 861.6936670005089,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 710.1398750000953,
+            "max_ms": 861.69429200163,
+            "mean_ms": 778.9454583338132,
+            "median_ms": 765.0022079997143,
+            "p95_ms": 861.69429200163,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.1028641603495865,
+          "max_ms": 0.1223476206164461,
+          "mean_ms": 0.11276750192645142,
+          "median_ms": 0.11309072481332165,
+          "p95_ms": 0.1223476206164461,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "numbers-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.24920800024119671,
+            "max_ms": 0.6429999993997626,
+            "mean_ms": 0.511180332978256,
+            "median_ms": 0.6413329992938088,
+            "p95_ms": 0.6429999993997626,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 507.9411659990001,
+            "max_ms": 531.7624580002303,
+            "mean_ms": 520.067069332678,
+            "median_ms": 520.4975839988037,
+            "p95_ms": 531.7624580002303,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 916.937665999285,
+            "max_ms": 1001.6772500002844,
+            "mean_ms": 952.0957079997364,
+            "median_ms": 937.6722079996398,
+            "p95_ms": 1001.6772500002844,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 916.9386249996023,
+            "max_ms": 1001.6782500006229,
+            "mean_ms": 952.0967499999339,
+            "median_ms": 937.6733749995765,
+            "p95_ms": 1001.6782500006229,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.037383850549703154,
+          "max_ms": 0.045489475476867526,
+          "mean_ms": 0.042378869485562215,
+          "median_ms": 0.04426328243011596,
+          "p95_ms": 0.045489475476867526,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "dates-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.40262500078824814,
+            "max_ms": 0.5111249993206002,
+            "mean_ms": 0.46506933358614333,
+            "median_ms": 0.48145800064958166,
+            "p95_ms": 0.5111249993206002,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 479.3457910000143,
+            "max_ms": 522.1209169994836,
+            "mean_ms": 494.3848886662939,
+            "median_ms": 481.6879579993838,
+            "p95_ms": 522.1209169994836,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 907.7778750015568,
+            "max_ms": 935.0550830004067,
+            "mean_ms": 923.4844723341666,
+            "median_ms": 927.6204590005364,
+            "p95_ms": 935.0550830004067,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 907.7786249999917,
+            "max_ms": 935.055583000576,
+            "mean_ms": 923.4852360004879,
+            "median_ms": 927.621500000896,
+            "p95_ms": 935.055583000576,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.036175393554963645,
+          "max_ms": 0.040332272575807696,
+          "mean_ms": 0.038467829683642804,
+          "median_ms": 0.03889582292015707,
+          "p95_ms": 0.040332272575807696,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "currencies-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.2762080002867151,
+            "max_ms": 0.8604579998063855,
+            "mean_ms": 0.4810833330945267,
+            "median_ms": 0.3065839991904795,
+            "p95_ms": 0.8604579998063855,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 519.8787499994069,
+            "max_ms": 613.1217090005521,
+            "mean_ms": 563.6685696669398,
+            "median_ms": 558.0052500008605,
+            "p95_ms": 613.1217090005521,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 842.0673749988055,
+            "max_ms": 948.9245420008956,
+            "mean_ms": 905.5169863331685,
+            "median_ms": 925.5590419998043,
+            "p95_ms": 948.9245420008956,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 842.0677079993766,
+            "max_ms": 948.924917000113,
+            "mean_ms": 905.5175139995603,
+            "median_ms": 925.559916999191,
+            "p95_ms": 948.924917000113,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.05034533653526241,
+          "max_ms": 0.054684673844564505,
+          "mean_ms": 0.05257781055872167,
+          "median_ms": 0.0527034212963381,
+          "p95_ms": 0.054684673844564505,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "abbreviations-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.247291000050609,
+            "max_ms": 0.5069170001661405,
+            "mean_ms": 0.391999667044729,
+            "median_ms": 0.4217910009174375,
+            "p95_ms": 0.5069170001661405,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 469.3096660012088,
+            "max_ms": 573.7586249997548,
+            "mean_ms": 522.1688193335771,
+            "median_ms": 523.4381669997674,
+            "p95_ms": 573.7586249997548,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 723.9115000011225,
+            "max_ms": 899.7021249997488,
+            "mean_ms": 821.2630416674074,
+            "median_ms": 840.1755000013509,
+            "p95_ms": 899.7021249997488,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 723.9125830001285,
+            "max_ms": 899.7027080004045,
+            "mean_ms": 821.26386066678,
+            "median_ms": 840.176290999807,
+            "p95_ms": 899.7027080004045,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.056754458951284725,
+          "max_ms": 0.06390539170378856,
+          "mean_ms": 0.06082589013030564,
+          "median_ms": 0.061817819735843646,
+          "p95_ms": 0.06390539170378856,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "code-switching-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.39804200059734285,
+            "max_ms": 0.4938749989378266,
+            "mean_ms": 0.4603609995683655,
+            "median_ms": 0.4891659991699271,
+            "p95_ms": 0.4938749989378266,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 523.3612089996313,
+            "max_ms": 575.4897500009974,
+            "mean_ms": 545.0591810003971,
+            "median_ms": 536.3265840005624,
+            "p95_ms": 575.4897500009974,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 751.436290998754,
+            "max_ms": 861.7415839999012,
+            "mean_ms": 811.0127776659889,
+            "median_ms": 819.8604579993116,
+            "p95_ms": 861.7415839999012,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 751.4372909990925,
+            "max_ms": 861.7427089993726,
+            "mean_ms": 811.0135833327755,
+            "median_ms": 819.8607499998616,
+            "p95_ms": 861.7427089993726,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.07867766767288291,
+          "max_ms": 0.1013099822477513,
+          "mean_ms": 0.0890334348838446,
+          "median_ms": 0.0871126547308996,
+          "p95_ms": 0.1013099822477513,
+          "count": 3
+        }
+      },
+      {
+        "sample_id": "emotion-1",
+        "provider": "elevenlabs",
+        "voice_id": "elevenlabs:sarah",
+        "repetitions": 3,
+        "stages": {
+          "preprocessing_ms": {
+            "min_ms": 0.15999999959603883,
+            "max_ms": 0.3906250003637979,
+            "mean_ms": 0.28829166694777086,
+            "median_ms": 0.3142500008834759,
+            "p95_ms": 0.3906250003637979,
+            "count": 3
+          },
+          "provider_ttfa_ms": {
+            "min_ms": 596.2432500000432,
+            "max_ms": 864.1997909999191,
+            "mean_ms": 696.514041333406,
+            "median_ms": 629.0990830002556,
+            "p95_ms": 864.1997909999191,
+            "count": 3
+          },
+          "backend_ttfa_ms": {
+            "min_ms": 770.9394160010561,
+            "max_ms": 1053.6947500004317,
+            "mean_ms": 882.5208610002543,
+            "median_ms": 822.9284169992752,
+            "p95_ms": 1053.6947500004317,
+            "count": 3
+          },
+          "total_generation_ms": {
+            "min_ms": 770.9402500004217,
+            "max_ms": 1053.6953330010874,
+            "mean_ms": 882.5214306671114,
+            "median_ms": 822.9287089998252,
+            "p95_ms": 1053.6953330010874,
+            "count": 3
+          }
+        },
+        "failures": 0,
+        "real_time_factor": {
+          "min_ms": 0.11515450969659514,
+          "max_ms": 0.14960887874500745,
+          "mean_ms": 0.1292277859735093,
+          "median_ms": 0.12291996947892532,
+          "p95_ms": 0.14960887874500745,
+          "count": 3
+        }
+      }
+    ]
   }
 ]

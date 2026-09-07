@@ -16,19 +16,32 @@ estimated, and a benchmark harness replays a fixed Arabic sample set to produce 
 statistics persisted as files.
 
 The technical approach is set by one finding from Phase 0: **no Arabic pronunciation or
-emotion control is portable across providers** — Azure has SSML phonemes but no Arabic
-speaking styles, ElevenLabs restricts phonemes to English, Google's Chirp 3 accepts no
-markup, and the Edge client escapes all input. Correction is therefore implemented as
-provider-independent orthographic rewriting in Python, with markup-based control as a
-capability-gated enhancement. This is what keeps the pipeline the asset rather than any
-vendor integration.
+emotion control is portable across providers** — none of the three integrated adapters
+declares phoneme support (ElevenLabs restricts phonemes to English, Groq's Orpheus Arabic
+model accepts no markup at all, and the Edge client escapes all input), and no Arabic voice
+in the catalogue exposes native speaking styles. Correction is therefore implemented as
+provider-independent orthographic rewriting in Python, with markup-based control reserved
+as a capability-gated enhancement for a future adapter that declares it. This is what keeps
+the pipeline the asset rather than any vendor integration. (Azure is excluded from this
+project by explicit mandate, not because it lacks SSML/phoneme support — see
+`specs/001-arabic-tts-prototype/research.md` R1.)
 
 ## Technical Context
 
 **Language/Version**: Python 3.12
 
-**Primary Dependencies**: FastAPI, Uvicorn, Pydantic v2, httpx (async, for Azure/ElevenLabs
-REST and SSE), edge-tts (Microsoft Edge Neural TTS client), pytest, pytest-asyncio
+**Primary Dependencies**: FastAPI, Uvicorn, Pydantic v2, httpx (async, for Groq/ElevenLabs
+REST and SSE), edge-tts (Microsoft Edge Neural TTS client), pytest, pytest-asyncio.
+Hugging Face layer (research.md R10-R14): `huggingface_hub` unconditionally (lightweight
+hosted-Inference-API client); `torch` + `transformers` added behind an optional
+`[huggingface-local]` extra only once a specific small local model from the Model
+Evaluation Matrix (R11) is actually wired up, so the credential-free Edge-only install
+stays fast for anyone not exercising the HF path.
+
+**Local hardware for on-device HF execution**: Apple M5, arm64, 24 GB unified memory, no
+discrete GPU — measured via `sysctl`, not assumed (R10). This is the ceiling that routes
+sub-~1B-parameter models to local MPS/CPU and everything larger to the hosted Inference
+API by default (R12).
 
 **Storage**: None. No database. Benchmark results and demonstration audio are written as
 files under `benchmarks/` and `docs/`; user text and audio are never persisted.
@@ -49,7 +62,8 @@ text or generated audio logged or persisted; every provider call carries an expl
 markup injection prevented by construction, not by filtering
 
 **Scale/Scope**: Single concurrent user; prototype demonstrating a pipeline, not a hosted
-multi-tenant service. Roughly 25 Python modules plus tests.
+multi-tenant service. Roughly 25 Python modules plus tests, plus ~10 more for the Hugging
+Face provider/linguistic-processing layer (below).
 
 ## Constitution Check
 
@@ -57,7 +71,7 @@ multi-tenant service. Roughly 25 Python modules plus tests.
 
 | # | Principle | Gate | Initial | Post-Design |
 |---|-----------|------|---------|-------------|
-| I | Python-First Backend | All preprocessing, routing, benchmarking and metrics live in Python; frontend holds no domain logic | PASS | PASS — frontend is one static page that only posts requests, plays an `<audio>` src, and renders returned fields |
+| I | Python-First Backend | All preprocessing, routing, benchmarking and metrics live in Python; frontend holds no domain logic | PASS | PASS — React is a typed presentation layer that posts requests, plays returned audio, and renders server decisions without duplicating linguistic or routing rules |
 | II | Provider Independence | No provider SDK imported outside `providers/`; no domain branch on provider name | PASS | PASS — verified by design: `TTSProvider` ABC + `Capabilities` descriptor; router consults capability data, never a vendor name. Enforced by an automated import test (T082) |
 | III | Arabic Linguistic Correctness | Hamza/taa-marbuta/alif-maqsura never folded; existing diacritics preserved; rules are data | PASS | PASS — `normalizer.py` explicitly excludes meaning-changing folds and documents why; `PronunciationRule` records are data loaded from a dictionary module |
 | IV | Latency Is A Feature | Async throughout, streaming-first, TTFA instrumented | PASS | PASS — `async def` end to end; `StreamingResponse` forwards each chunk; `LatencyTrace` marks T0–T7 |
@@ -68,6 +82,15 @@ multi-tenant service. Roughly 25 Python modules plus tests.
 
 **Result: PASS on all eight gates, before and after design. Complexity Tracking is empty —
 no deviation required justification.**
+
+**Re-checked for the Hugging Face dialect/pronunciation layer (US6-7, FR-048–FR-062):**
+
+| # | Principle | How the HF layer satisfies it |
+|---|-----------|-------------------------------|
+| II | Provider Independence | HF synthesis lives behind the same provider interface as Edge/Groq/ElevenLabs (`providers/huggingface/`); HF dialect detection/diacritization/G2P are separate linguistic-processing services, not TTS — neither branches routing on "this is Hugging Face" (FR-060) |
+| V | Measured, Not Claimed | research.md R11 is itself the enforcement mechanism for FR-058: nothing is downloaded before its license/size/relevance is recorded; FR-061/FR-062 require every dialect-improvement claim to cite a listening score, not a model card |
+| VI | Graceful Degradation | An unavailable/oversized/timed-out HF model reports `unavailable` and falls through to an existing provider (FR-057), the same path already proven for Groq/ElevenLabs credential absence |
+| VIII | Testability And Simplicity | Hosted-API-first (R12) is chosen specifically because it is the simpler default — no local model weights, no GPU code path — until a listening test justifies the added complexity of a local backend |
 
 Two design choices are worth naming explicitly because they were made *to* satisfy gates
 rather than in tension with them:
@@ -112,15 +135,25 @@ backend/
 │   │   ├── tts.py                  # POST /api/tts, POST /api/tts/stream, /api/preview
 │   │   ├── voices.py               # GET /api/voices, /api/providers, /api/locales
 │   │   ├── benchmark.py            # POST /api/benchmark, GET /api/samples
-│   │   └── pronunciation.py        # GET /api/pronunciation/demo, before/after audio
+│   │   ├── pronunciation.py        # GET /api/pronunciation/demo, before/after audio
+│   │   └── dialect.py              # POST /api/dialect/resolve, POST /api/dialect/compare
+│   │                                # (US6/US7: detect-or-accept dialect; raw-vs-corrected
+│   │                                # comparison for arbitrary text, not only the fixed demo)
 │   │
 │   ├── providers/
 │   │   ├── base.py                 # TTSProvider ABC, Capabilities, ProviderError
 │   │   ├── edge.py                 # Microsoft Edge Neural TTS (credential-free)
-│   │   ├── azure.py                # Azure AI Speech REST (credential-gated)
+│   │   ├── groq.py                 # Groq Orpheus Arabic — Saudi dialect (credential-gated)
 │   │   ├── elevenlabs.py           # ElevenLabs SSE streaming (credential-gated)
 │   │   ├── fake.py                 # Deterministic test double (offline suite)
-│   │   └── registry.py             # Availability-aware provider registry
+│   │   ├── registry.py             # Availability-aware provider registry
+│   │   └── huggingface/            # FR-060: HF synthesis behind the same TTSProvider ABC
+│   │       ├── provider.py         #   Adapter; picks an execution backend per HFModelConfig
+│   │       ├── local.py            #   MPS/CPU backend (small models only — R10 ceiling)
+│   │       ├── inference_api.py    #   Hosted Inference API backend (default — R12)
+│   │       ├── endpoint.py         #   Dedicated Inference Endpoint backend (documented,
+│   │       │                       #   not wired to any model by default — R12)
+│   │       └── models.py           #   Request/response/config dataclasses for this package
 │   │
 │   ├── text_processing/
 │   │   ├── pipeline.py             # Ordered stage composition + per-stage diff record
@@ -132,49 +165,69 @@ backend/
 │   │   ├── code_switching.py       # Arabic/Latin span detection and handling
 │   │   ├── pronunciation.py        # PronunciationRule application
 │   │   ├── dictionary.py           # Rule data (names, brands, places, domain terms)
-│   │   └── provider_formatting.py  # SSML construction with escaping
+│   │   ├── provider_formatting.py  # SSML construction with escaping
+│   │   └── huggingface/            # FR-060: separate from TTS; independently testable
+│   │       ├── dialect_classifier.py  # FR-048: text-in dialect detection (R13)
+│   │       ├── diacritizer.py         # FR-052/053: diacritization backend calls
+│   │       ├── g2p.py                 # Phoneme representation for the pronunciation dict
+│   │       ├── pronunciation_model.py # FR-052: dictionary lookup + dialect scoping
+│   │       └── model_registry.py      # FR-055: reads HFModelConfig, no hardcoded models
 │   │
 │   ├── services/
 │   │   ├── tts_service.py          # Orchestration, fallback, trace assembly
 │   │   ├── voice_router.py         # Dialect/locale/family → voice resolution
 │   │   ├── benchmark_service.py    # Warm-up, repetitions, statistics, persistence
-│   │   └── latency.py              # LatencyTrace, T0–T7 marks, derived metrics
+│   │   ├── latency.py              # LatencyTrace, T0–T7 marks, derived metrics
+│   │   └── dialect_service.py      # FR-048/FR-053: resolves dialect (user > classifier),
+│   │                                # assembles the raw-vs-corrected comparison result
 │   │
 │   ├── models/
 │   │   ├── tts.py                  # TTSRequest, TTSResponse, ProcessedText, LatencyReport
 │   │   ├── voice.py                # VoiceConfig, Dialect, EmotionStyle, AudioFormat
-│   │   └── benchmark.py            # BenchmarkRun, BenchmarkResult, StageStats
+│   │   ├── benchmark.py            # BenchmarkRun, BenchmarkResult, StageStats
+│   │   └── dialect.py              # DialectProfile, PronunciationDictionaryEntry,
+│   │                                # HFModelConfig, DialectDetectionResult
 │   │
 │   └── data/
-│       ├── voices.py               # Voice catalogue (16 Arabic locales)
-│       └── samples.py              # Arabic evaluation sample set
+│       ├── voices.py                    # Voice catalogue (16 Arabic locales)
+│       ├── samples.py                   # Arabic evaluation sample set
+│       ├── dialect_profiles.py          # FR-049: msa/levantine/lebanese/gulf/saudi/egyptian
+│       ├── pronunciation_dictionary.py  # FR-052: token-level entries (distinct from the
+│       │                                # existing pattern-matched dictionary.py rules)
+│       └── hf_model_registry.py         # FR-055/FR-058: the Model Evaluation Matrix
+│                                         # (research.md R11) as loadable HFModelConfig data
 │
 └── tests/
-    ├── unit/                       # Text processing, router, models, latency, statistics
+    ├── unit/                       # Text processing, router, models, latency, statistics,
+    │                                # + dialect resolution, pronunciation dict, HF registry
     ├── contract/                   # Provider interface conformance, API schemas
-    ├── integration/                # Live provider tests (credential-gated, marked)
+    ├── integration/                # Live provider tests (credential-gated, marked),
+    │                                # + live HF calls gated on HF_TOKEN
     └── conftest.py
 
 frontend/
-└── index.html                      # Single static page: RTL textarea, selectors,
-                                    # audio player, processed-text view, latency panel,
-                                    # pronunciation before/after (no build step)
+├── src/                            # React + TypeScript presentation components,
+│                                   # typed API adapter, RTL styles, and frontend tests
+├── index.html                      # Vite application shell
+├── package.json                    # Development, test, type-check, and build commands
+└── dist/                           # Generated production assets served by FastAPI
 
 benchmarks/                         # Generated: results.json, <provider>.json, comparison.csv
-docs/                               # TTS_EVALUATION.md, ARABIC_TEST_CASES.md,
+docs/                               # TTS_EVALUATION.md, DIALECT_EVALUATION.md,
+                                    # VOICE_CATALOG.md, ARABIC_TEST_CASES.md,
                                     # PRONUNCIATION.md, BENCHMARK_RESULTS.md,
-                                    # PRODUCTION_ARCHITECTURE.md, PROVIDER_RESEARCH_NOTES.md
+                                    # PRODUCTION_ARCHITECTURE.md, PROVIDER_RESEARCH_NOTES.md,
+                                    # HF_MODEL_RESEARCH.md, PRONUNCIATION_EVALUATION.md
 .env.example
 README.md
 pyproject.toml
 ```
 
 **Structure Decision**: Web-application layout (`backend/` + `frontend/`), chosen because the
-feature has a genuine service boundary — a Python API that the demo page consumes over HTTP
-and that the benchmark harness consumes directly. The single-project layout was rejected
-because it would blur the boundary that Principle I exists to protect. The `frontend/`
-directory holds exactly one file with no build step, keeping the asymmetry explicit: the
-backend is the deliverable, the page is a window onto it.
+feature has a genuine service boundary — a Python API consumed over HTTP by both the React
+presentation layer and the benchmark harness. The typed frontend adapter mirrors the HTTP
+contract but owns no provider, routing, or linguistic decisions. Vite emits static assets to
+`frontend/dist`, which FastAPI serves in the single-server production path.
 
 Layering runs strictly one way — `api` → `services` → `providers` / `text_processing` →
 `models`. `text_processing` imports nothing from `providers` or `services`, which is what
@@ -205,6 +258,26 @@ keeps its functions pure and testable offline.
 5. **The pronunciation demo is generated, not authored.** A script synthesizes the candidate
    text, the defect is confirmed by listening, and only then is the case recorded with the
    voice and provider that exhibited it. Task ordering enforces this (T076 before T077).
+
+6. **The Hugging Face model registry is the only place a specific `repo_id` is named.**
+   `hf_model_registry.py` holds the R11 Model Evaluation Matrix as data (`HFModelConfig`);
+   `dialect_service.py`, the HF provider adapter, and the linguistic-processing services all
+   read from it. This is what makes swapping `oddadmix/chatterbox-egyptian-v0` for a later,
+   better-verified Egyptian model a data change, not an application-logic change — the same
+   discipline Decision 2 already applies to provider routing.
+
+7. **Dialect resolution always tries user selection before the classifier, and both are
+   still returned.** `dialect_service.resolve()` returns a `DialectDetectionResult`
+   carrying whichever path was used and, when the classifier ran, its raw label and
+   confidence — never silently discarding the classifier's actual output even when the
+   user's selection overrides it, so FR-051's honesty requirement is structural rather than
+   a formatting convention applied at the last step.
+
+8. **The raw-vs-corrected comparison and the fixed pronunciation demo share one code path.**
+   `GET /api/pronunciation/demo` (Story 5) becomes a call to the same comparison assembly
+   `POST /api/dialect/compare` (Story 7) uses, with the demo's fixed sample as input — so
+   the two cannot drift apart and Story 7's generality is verified by construction rather
+   than by keeping two implementations in sync by hand.
 
 ## Complexity Tracking
 

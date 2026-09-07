@@ -74,6 +74,33 @@ pronunciation, technique, and the provider/voice on which it was observed (FR-01
 
 Streams the before or after rendering of the same source text (FR-020).
 
+## `POST /api/dialect/resolve` — resolve a dialect for text without synthesizing
+
+Body: `{text: str, dialect?: str}`. If `dialect` is given it is returned unchanged as
+`source: "user_selected"` (FR-048) — the classifier still runs and its output is included
+for transparency (Story 6, Scenario 4) but never overrides the selection. If omitted, the
+Hugging Face text dialect classifier runs and its output becomes `resolved_dialect`.
+Returns `200` with a `DialectDetectionResult`.
+
+Errors: `422` validation; `200` with `resolved_dialect: null` and an explanatory message
+when the classifier is unavailable (missing `HF_TOKEN`, model timeout) — never a `5xx` for
+a degraded-but-handled HF failure (FR-057).
+
+## `POST /api/dialect/compare` — raw vs. Hugging-Face-corrected comparison (US7)
+
+Body: `{text: str, dialect?: str}` — the same shape as `/api/dialect/resolve`, plus it
+synthesizes both renderings. Returns `200` with a `DialectComparisonResult`:
+`original_text`, `detection`, `processed_text`, `changes`, and two audio references
+(`raw_audio_ref`, `corrected_audio_ref`), each independently fetchable the same way
+`/api/pronunciation/demo/audio` already serves audio.
+
+`GET /api/pronunciation/demo` (FR-019/FR-020) is a **fixed-input call to this same
+assembly** (Design Decision 8, plan.md) — the demo case is not a separate implementation.
+
+Errors: `422` validation; when no Hugging Face correction was applicable, `200` with
+`changes: []` and `corrected_audio_ref` identical in content to `raw_audio_ref` — stated
+plainly, never fabricated as different (Story 7, Scenario 3).
+
 ## `GET /health`
 
 `{"status": "ok", "providers_available": n}`.
@@ -98,3 +125,7 @@ Serves the static demonstration page.
 | AC-08 | Primary failure → fallback served, `used_fallback` true | FR-033 |
 | AC-09 | All providers unavailable → 503, service still running | FR-034 |
 | AC-10 | Every synthesis response carries a complete `LatencyReport` | FR-031 |
+| AC-11 | User-selected dialect always wins over the classifier's output | FR-048 |
+| AC-12 | Classifier output narrower than requested is reported honestly, never invented | FR-051 |
+| AC-13 | Dialect-classifier or HF-model unavailability degrades to `200`/skip, never `5xx` | FR-057 |
+| AC-14 | `/api/dialect/compare` and `/api/pronunciation/demo` share one assembly (no drift) | Design Decision 8 |

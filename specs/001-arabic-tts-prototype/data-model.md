@@ -243,6 +243,99 @@ TTSService ──> Provider.stream() ──> audio chunks ──> StreamingRespo
 BenchmarkService ──> ArabicSample[] × repetitions ──> BenchmarkResult[] ──> BenchmarkRun ──> files
 ```
 
+## Hugging Face Dialect and Pronunciation Layer (US6-7, FR-048–FR-062)
+
+These entities are additive: they do not replace `Dialect` (the five-way locale-routing
+family above) or `PronunciationRule` (the pattern-matched orthographic rewriter). A
+`DialectProfile.id` can be **narrower** than a `Dialect` family value — e.g. `lebanese` is
+a `DialectProfile` while the `Dialect` enum still only routes at `levantine` granularity
+for provider-voice selection, because no integrated TTS provider (Edge/Groq/ElevenLabs)
+publishes a Lebanese-specific locale (research.md R2). `DialectProfile` is where that
+finer granularity becomes representable — honestly, with a confidence label — without
+inventing a `Dialect` enum value no provider actually backs.
+
+### `DialectProfile`
+
+| Field | Type | Notes | Requirement |
+|-------|------|-------|-------------|
+| `id` | `str` | e.g. `lebanese`, `gulf`, `msa` — may be finer than a `Dialect` family value | FR-049 |
+| `name` | `str` | Display name | FR-049 |
+| `region` | `str \| None` | Free-text geographic label | FR-049 |
+| `dialect_family` | `Dialect` | The `Dialect` enum value this profile maps to for provider-voice routing (e.g. `lebanese` → `levantine`) | FR-049, bridges to existing `VoiceRouter` |
+| `locale` | `str \| None` | A specific provider locale this profile prefers when one exists (e.g. `ar-LB`) | FR-049 |
+| `aliases` | `list[str]` | Alternate names/spellings a user or classifier might use | FR-049 |
+| `normalization_rules` | `list[str]` | References into the pronunciation dictionary/rule set; MUST NOT include a rule that rewrites this dialect's vocabulary toward MSA | FR-050 |
+| `pronunciation_model` | `HFModelConfig.id \| None` | Which registry entry, if any, handles pronunciation for this profile | FR-049 |
+| `diacritization_model` | `HFModelConfig.id \| None` | Which registry entry, if any, diacritizes for this profile | FR-049 |
+| `preferred_tts_models` | `list[HFModelConfig.id]` | Ordered; empty when no dialect-specific HF TTS model has cleared research.md's Model Evaluation Matrix yet | FR-049, FR-054 |
+| `fallback_tts_models` | `list[str]` | Existing provider/voice ids (Edge/Groq/ElevenLabs) to use when no HF model applies | FR-049, FR-057 |
+
+FR-050 is enforced at the data level, not just the code level: `normalization_rules` is
+reviewed for MSA-flattening rules the same way `PronunciationRule.whole_word` prevents
+substring corruption — a rule that collapses dialect vocabulary to its MSA form is a data
+defect, not merely a bad runtime decision.
+
+### `PronunciationDictionaryEntry`
+
+| Field | Type | Notes | Requirement |
+|-------|------|-------|-------------|
+| `token` | `str` | Exact or aliased lookup key | FR-052 |
+| `dialect` | `str \| None` | A `DialectProfile.id`; `None` applies everywhere, same nullable pattern as `PronunciationRule.locale` | FR-052 |
+| `normalized` | `str \| None` | Canonical written form | FR-052 |
+| `diacritized` | `str \| None` | Fully or partially diacritized form | FR-052 |
+| `phonemes` | `str \| None` | G2P output, when available | FR-052 |
+| `aliases` | `list[str]` | Alternate spellings that resolve to this entry | FR-052 |
+| `notes` | `str \| None` | Why the entry exists | FR-052 |
+
+Distinct from `PronunciationRule`: a dictionary entry is looked up by exact/aliased token
+(names, places, products — closed-set lookup); a rule is pattern-matched (FR-017's broader
+written-form-to-correction mapping). Both are consulted during pronunciation processing;
+a `PronunciationDictionaryEntry` match takes precedence for the token it covers.
+
+### `HFModelConfig`
+
+| Field | Type | Notes | Requirement |
+|-------|------|-------|-------------|
+| `id` | `str` | Stable internal id (may differ from `repo_id`, e.g. when the registry pins a revision) | FR-055 |
+| `repo_id` | `str` | Hugging Face Hub repository id | FR-055, FR-058 |
+| `task` | `str` | `dialect_tts`, `dialect_classification`, `diacritization`, `g2p` | FR-055 |
+| `dialects` | `list[str]` | `DialectProfile.id` values this model actually serves — MUST NOT list a dialect the model card does not support (Constitution V) | FR-055, FR-061 |
+| `local_supported` | `bool` | Whether R10's hardware ceiling allows local execution | FR-055, FR-056 |
+| `remote_supported` | `bool` | Whether it is reachable through the hosted Inference API | FR-055, FR-056 |
+| `streaming` | `bool` | | FR-055 |
+| `requires_gpu` | `bool` | As documented on the model card, not inferred | FR-055 |
+| `approximate_vram_gb` | `float \| None` | From the model card when stated | FR-055 |
+| `license` | `str \| None` | Recorded before use, per FR-058 — `None` means "unverified," which blocks use, not an implicit "permissive" | FR-058 |
+| `enabled` | `bool` | Registry-level kill switch, independent of code changes | FR-055 |
+| `source_url` | `str` | The model card/paper URL the above fields were verified against (research.md R11) | Constitution V |
+
+An entry with `license: None` or `enabled: False` MUST NOT be selected by
+`dialect_service` or the HF provider adapter — this is what makes FR-058's
+"don't download before verifying" gate mechanical rather than a process reminder.
+
+### `DialectDetectionResult`
+
+| Field | Type | Notes | Requirement |
+|-------|------|-------|-------------|
+| `resolved_dialect` | `str` | The `DialectProfile.id` actually used | FR-048 |
+| `source` | `Literal["user_selected", "classifier"]` | Which path determined it | FR-048 |
+| `classifier_label` | `str \| None` | The classifier's raw output, even when overridden by user selection | FR-051 |
+| `classifier_confidence` | `float \| None` | `None` when `source == "user_selected"` and the classifier did not run | FR-048, FR-051 |
+| `mapped_from_family` | `bool` | `True` when `resolved_dialect` is narrower than what the classifier could actually distinguish (e.g. app prefers `lebanese`, classifier only resolves `levantine`) | FR-051 |
+
+`classifier_label` is populated even when `source == "user_selected"` *if* the classifier
+was still run for transparency (Story 6, Scenario 4) — never discarded silently.
+
+### `DialectComparisonResult` (US7 response shape)
+
+`original_text`, `detection: DialectDetectionResult`, `processed_text: ProcessedText`,
+`changes: list[str]` (human-readable, e.g. `"pronunciation correction: token X"`,
+`"diacritic added"`, `"abbreviation expanded"`), `raw_audio_ref`, `corrected_audio_ref`
+(both playable, per FR-053), `architecture_used: str` (which of FR-054's four
+architectures produced `corrected_audio_ref`, for traceability back to the evaluation).
+
+---
+
 ## Validation Summary
 
 | Rule | Enforced by | Requirement |

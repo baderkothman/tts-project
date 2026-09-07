@@ -62,8 +62,9 @@ class EdgeProvider(TTSProvider):
             max_chars=5000,
             requires_credentials=False,
             notes="Unofficial Microsoft Edge read-aloud endpoint. No SLA. "
-            "Suitable for prototyping; Azure AI Speech is the production path "
-            "for the same voice family.",
+            "Credential-free, so it is the one path guaranteed runnable and "
+            "benchmarkable in every environment; Groq's Orpheus Arabic model "
+            "is the adapter for genuinely dialect-trained (non-MSA) speech.",
         )
 
     def available(self) -> ProviderStatus:

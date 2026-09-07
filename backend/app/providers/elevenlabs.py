@@ -85,6 +85,17 @@ class ElevenLabsProvider(TTSProvider):
                 async with client.stream("POST", url, json=payload, headers=headers) as resp:
                     if resp.status_code == 401:
                         raise ProviderError(self.id, "auth", "ElevenLabs rejected the API key")
+                    if resp.status_code == 402:
+                        # Discovered live (docs/TTS_EVALUATION.md), not documented
+                        # up front: the free tier rejects API calls to public
+                        # "library" voices (both catalogued voices are library
+                        # voices) — a plan restriction, not a malformed request
+                        # or an invalid key, hence its own ErrorKind.
+                        raise ProviderError(
+                            self.id, "payment_required",
+                            "ElevenLabs rejected this voice under the current plan "
+                            "(free tier cannot call library voices via the API)",
+                        )
                     if resp.status_code == 429:
                         raise ProviderError(self.id, "rate_limit", "ElevenLabs rate limit exceeded")
                     if resp.status_code >= 500:

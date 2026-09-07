@@ -13,12 +13,12 @@ from backend.app.providers.base import TTSProvider
 from backend.app.providers.edge import EdgeProvider
 
 
-def _build_azure(settings: Settings) -> TTSProvider | None:
+def _build_groq(settings: Settings) -> TTSProvider | None:
     try:
-        from backend.app.providers.azure import AzureProvider
+        from backend.app.providers.groq import GroqProvider
     except ImportError:
         return None
-    return AzureProvider(settings=settings)
+    return GroqProvider(settings=settings)
 
 
 def _build_elevenlabs(settings: Settings) -> TTSProvider | None:
@@ -29,6 +29,14 @@ def _build_elevenlabs(settings: Settings) -> TTSProvider | None:
     return ElevenLabsProvider(settings=settings)
 
 
+def _build_huggingface(settings: Settings) -> TTSProvider | None:
+    try:
+        from backend.app.providers.huggingface.provider import HuggingFaceProvider
+    except ImportError:
+        return None
+    return HuggingFaceProvider(settings=settings)
+
+
 class ProviderRegistry:
     """Holds every configured provider, available or not."""
 
@@ -36,7 +44,7 @@ class ProviderRegistry:
         self._settings = settings or get_settings()
         self._providers: dict[str, TTSProvider] = {"edge": EdgeProvider()}
 
-        for builder in (_build_azure, _build_elevenlabs):
+        for builder in (_build_groq, _build_elevenlabs, _build_huggingface):
             provider = builder(self._settings)
             if provider is not None:
                 self._providers[provider.id] = provider

@@ -58,14 +58,41 @@ provider — including `FakeProvider`, so the suite is meaningful offline.
 ```python
 class ProviderError(Exception):
     provider: str
-    kind: Literal["timeout", "auth", "rate_limit", "unavailable", "bad_request", "server"]
+    kind: Literal[
+        "timeout", "auth", "rate_limit", "unavailable", "bad_request", "server",
+        "payment_required",
+    ]
     retryable: bool
     message: str          # MUST NOT contain credentials or user text
 ```
 
 `kind` drives fallback policy in `TTSService`: `timeout`, `rate_limit`, `unavailable`, and
-`server` trigger a fallback attempt; `auth` and `bad_request` do not, because retrying a
-malformed or unauthorized request on another provider wastes a call and hides the real fault.
+`server` trigger a fallback attempt; `auth`, `bad_request`, and `payment_required` do not,
+because retrying a malformed, unauthorized, or plan-restricted request on another provider
+wastes a call and hides the real fault. `payment_required` (HTTP 402) was added after live
+testing found a real, undocumented case: a valid key whose account plan still cannot use a
+given voice (ElevenLabs' free tier rejects API calls to public "library" voices) — distinct
+from `auth` (the key itself is invalid) and `bad_request` (the request is malformed).
+
+## The Hugging Face provider (FR-060)
+
+`backend/app/providers/huggingface/provider.py` implements this same `TTSProvider`
+interface — it is a fourth adapter, not a parallel system. `local.py`/`inference_api.py`/
+`endpoint.py` are execution-mode backends `provider.py` chooses between per the
+`HFModelConfig` a request resolves to (research.md R11-R12); none of the three backends is
+itself a `TTSProvider` — only `provider.py` is, which is what keeps `TTSService` and the
+router unaware that more than one execution mode exists underneath.
+
+No new `ProviderError.kind` was needed for this adapter: a local model too large for R10's
+hardware ceiling maps to `unavailable` (same as a missing API key); a hosted Inference API
+cold start or rate limit maps to `timeout`/`rate_limit` (same fallback-eligible path any
+other provider uses); an unverified-license model in the registry (FR-058) is refused at
+selection time, before a `ProviderError` would even apply.
+
+The linguistic-processing services (`dialect_classifier.py`, `diacritizer.py`, `g2p.py`,
+`pronunciation_model.py`) are explicitly **not** `TTSProvider` implementations — they
+produce text/metadata, not audio, and are consumed by `dialect_service.py`, never
+registered in `providers/registry.py` (FR-060).
 
 ## Adding a provider (SC-010)
 

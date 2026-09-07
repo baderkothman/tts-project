@@ -7,6 +7,7 @@ How to run the prototype and verify each success criterion. Commands are exact.
 ## Prerequisites
 
 - Python 3.12+
+- Node.js 20.19+ (or 22.12+) and npm
 - Network access to the Microsoft Edge TTS endpoint (the credential-free default path)
 - No API keys required for the default path
 
@@ -15,7 +16,8 @@ How to run the prototype and verify each success criterion. Commands are exact.
 ```bash
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -e ".[dev]"
-cp .env.example .env      # optional: only to enable Azure / ElevenLabs
+cp .env.example .env      # optional: only to enable Groq / ElevenLabs
+cd frontend && npm install && npm run build && cd ..
 ```
 
 ## Run
@@ -122,9 +124,54 @@ audibly different renderings from `/api/pronunciation/demo/audio?corrected=false
 
 **Expect**: passes with integration tests reported as **skipped**, not failed.
 
+### V14 — Raw vs. corrected comparison works for arbitrary text (SC-017, US7)
+
+```bash
+curl -sX POST http://127.0.0.1:8000/api/dialect/compare \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "بكرا عندي meeting عالـ 10", "dialect": "lebanese"}'
+```
+
+**Expect**: a `DialectComparisonResult` with `detection.source == "user_selected"`,
+`detection.resolved_dialect == "lebanese"`, a non-empty `changes` list if any correction
+applied, and both `raw_audio_ref`/`corrected_audio_ref` independently fetchable and
+audibly different when `changes` is non-empty. Works entirely offline (no `HF_TOKEN`) if
+no dialect-specific HF correction is registered yet — the comparison still runs through
+the existing Edge/Groq/ElevenLabs path for both renderings and reports no correction
+applied, per FR-057/AC-13, rather than failing.
+
+### V15 — Dialect classifier proposes and is overridable (SC-016/SC-020, US6)
+
+Requires `HF_TOKEN` set in `.env` for a live classifier call; without it, this scenario is
+skipped (credential-gated, same pattern as Groq/ElevenLabs), not failed.
+
+```bash
+curl -sX POST http://127.0.0.1:8000/api/dialect/resolve \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "شو رأيك نطلع نشرب قهوة بعد الشغل؟"}'
+```
+
+**Expect**: `source == "classifier"`, a `classifier_confidence` between 0 and 1, and
+`resolved_dialect` naming the broadest dialect the classifier (research.md R11:
+`IbrahimAmin/marbertv2-arabic-written-dialect-classifier`) actually distinguishes — which
+is `levantine`, not `lebanese` (R11's finding that no evaluated classifier separates
+Lebanese from Levantine). Re-run with `"dialect": "lebanese"` in the body and confirm
+`source` flips to `user_selected` while `classifier_label` is still populated
+(FR-051/AC-12).
+
+```bash
+.venv/bin/pytest backend/tests/unit -k "dialect or pronunciation_dict or hf_registry" -v
+```
+
+**Expect**: dialect resolution, pronunciation-dictionary lookup, and model-registry tests
+pass fully offline (mocked HF calls), per the same `httpx.MockTransport` pattern already
+proven for Groq/ElevenLabs.
+
 ## Enabling credential-gated providers
 
-Set in `.env`: `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION`, and/or `ELEVENLABS_API_KEY`.
+Set in `.env`: `GROQ_API_KEY`, `ELEVENLABS_API_KEY`, and/or `HF_TOKEN` (Hugging Face
+hosted Inference API — optional, same credential-gated pattern; V14 works without it, V15
+does not).
 Restart. `GET /api/providers` should move them from `missing_credentials` to `available`.
 Then:
 

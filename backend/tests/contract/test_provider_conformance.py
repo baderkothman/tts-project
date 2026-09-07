@@ -104,7 +104,7 @@ async def test_pc07_timeout_classified_as_retryable_provider_error():
     not itself enforce a wall-clock deadline, so this does not reproduce
     network-level timeout enforcement. That enforcement is real in the live
     adapters — edge.py passes connect/receive timeouts to edge_tts.Communicate,
-    azure.py and elevenlabs.py pass `timeout=request.timeout_s` to
+    groq.py and elevenlabs.py pass `timeout=request.timeout_s` to
     httpx.AsyncClient, both verified by reading their signatures — but
     exercising it here would need a slow mock HTTP server, out of scope for
     the offline suite. What THIS test verifies: once a timeout kind of

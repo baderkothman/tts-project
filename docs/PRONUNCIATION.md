@@ -57,7 +57,7 @@ PronunciationRule(
     replacement="corrected form",
     category="person" | "company" | "place" | "product" | "medical" | "banking" | "foreign" | "ambiguous",
     locale=None,       # or e.g. "ar-SA" to scope to one locale
-    provider=None,     # or e.g. "azure" for a provider-specific phoneme rule
+    provider=None,     # or e.g. a specific provider id, for a future phoneme-capable adapter
     whole_word=True,   # False only for deliberate substring rules
     notes="why this rule exists",
 )

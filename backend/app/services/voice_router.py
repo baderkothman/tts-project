@@ -7,7 +7,7 @@ valid alternatives named, never falling back silently to an unrelated voice.
 
 from __future__ import annotations
 
-from backend.app.data.voices import DEFAULT_LOCALE, locales_for_dialect
+from backend.app.data.voices import DEFAULT_LOCALE
 from backend.app.models.voice import Dialect, VoiceConfig
 from backend.app.providers.base import TTSProvider
 
@@ -54,8 +54,13 @@ def resolve_voice(
         return candidates[0]
 
     if dialect is not None:
-        family_locales = set(locales_for_dialect(dialect))
-        candidates = [v for v in voices if v.locale in family_locales]
+        # Match each voice's OWN declared dialect, not a locale-string lookup
+        # (dropped after a real bug: Groq's Saudi-dialect voices and Edge's
+        # MSA-trained ar-SA voice share the locale string "ar-SA" but carry
+        # different `dialect` values — locale and dialect authenticity are
+        # independent axes here, see docs/DIALECT_EVALUATION.md — so routing
+        # must key on `dialect` directly, which every voice already carries).
+        candidates = [v for v in voices if v.dialect == dialect]
         if not candidates:
             raise VoiceResolutionError(
                 f"dialect family '{dialect.value}' not servable by provider '{provider.id}'",

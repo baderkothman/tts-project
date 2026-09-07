@@ -23,12 +23,19 @@ from backend.app.models.voice import (
 )
 
 ErrorKind = Literal[
-    "timeout", "auth", "rate_limit", "unavailable", "bad_request", "server"
+    "timeout", "auth", "rate_limit", "unavailable", "bad_request", "server",
+    "payment_required",
 ]
 
-# Kinds worth retrying on a different provider. `auth` and `bad_request` are
-# excluded deliberately: retrying a malformed or unauthorised request elsewhere
-# burns a second call and hides the real fault.
+# Kinds worth retrying on a different provider. `auth`, `bad_request`, and
+# `payment_required` are excluded deliberately: retrying a malformed,
+# unauthorized, or plan-restricted request elsewhere burns a second call and
+# hides the real fault. `payment_required` (HTTP 402) is its own kind rather
+# than folded into `bad_request` because it is a distinct, actionable
+# condition — the request was well-formed and the key valid, but the account
+# plan does not permit it (discovered live: ElevenLabs' free tier rejects
+# calls to public "library" voices via the API) — and callers may want to
+# handle "fix your plan" differently from "fix your request".
 RETRYABLE_KINDS: frozenset[str] = frozenset(
     {"timeout", "rate_limit", "unavailable", "server"}
 )

@@ -45,11 +45,7 @@ DEFAULT_LOCALE = "ar-SA"
 
 
 def _build(provider: str, supports_ssml: bool) -> list[VoiceConfig]:
-    """Build the catalogue for a Microsoft-voice-family provider.
-
-    Edge and Azure serve the *same* underlying neural voices; they differ in
-    the control surface (Azure exposes SSML, Edge does not), not the roster.
-    """
+    """Build the catalogue for a Microsoft-neural-voice-family provider."""
     voices: list[VoiceConfig] = []
     default_fallback = f"{provider}:{DEFAULT_LOCALE}-female"
 
@@ -78,16 +74,54 @@ def _build(provider: str, supports_ssml: bool) -> list[VoiceConfig]:
 
 
 EDGE_VOICES: list[VoiceConfig] = _build("edge", supports_ssml=False)
-AZURE_VOICES: list[VoiceConfig] = _build("azure", supports_ssml=True)
+
+# Groq's Orpheus Arabic model: a genuinely dialect-trained (Saudi/Gulf) voice
+# family, distinct from the MSA-trained Microsoft voices above even though it
+# shares the ar-SA locale (research R1). Six voices, confirmed against the
+# vendor's Orpheus Arabic model page (fetched 2026-09-07): 3 male, 3 female.
+# provider_voice_id is lowercase deliberately: the live API rejects the
+# capitalized form documented on the vendor's page ("voice must be one of
+# [fahad sultan noura lulwa aisha abdullah]") — caught by a real 400 response
+# once a GROQ_API_KEY was configured, not assumed from the docs (Constitution V).
+GROQ_VOICES: list[VoiceConfig] = [
+    VoiceConfig(
+        id=f"groq:ar-SA-{name.lower()}",
+        provider="groq",
+        provider_voice_id=name.lower(),
+        locale="ar-SA",
+        dialect=Dialect.GULF,
+        gender=gender,
+        supports_streaming=False,
+        supports_emotions=False,
+        supports_ssml=False,
+        latency_class="standard",
+        fallback_voice_id=None if name == "Abdullah" else "groq:ar-SA-abdullah",
+        display_name=f"{name} — Saudi dialect ({gender})",
+    )
+    for name, gender in (
+        ("Abdullah", "male"), ("Fahad", "male"), ("Sultan", "male"),
+        ("Lulwa", "female"), ("Noura", "female"), ("Aisha", "female"),
+    )
+]
 
 # ElevenLabs publishes no Arabic locale codes; its Arabic voices vary by accent
 # without a documented locale. They are catalogued with dialect=None rather
 # than an inferred family (FR-027, research R2).
+#
+# Voice selection constraint discovered live (docs/TTS_EVALUATION.md): the
+# free tier's API rejects calls to public "Voice Library" voices (402
+# payment_required) — only voices already present in the account's OWN
+# library (`GET /v1/voices`) are callable. "Rachel" (21m00Tcm4TlvDq8ikWAM),
+# ElevenLabs' commonly-documented example voice, is a library voice and is
+# NOT in this project's configured account by default, so it was replaced
+# with "Sarah", one of the ~20 premade voices ElevenLabs gives every new
+# account by default — confirmed live: both Sarah and Adam returned real
+# Arabic audio (200, non-empty MP3 bytes) with the configured key.
 ELEVENLABS_VOICES: list[VoiceConfig] = [
     VoiceConfig(
-        id="elevenlabs:rachel",
+        id="elevenlabs:sarah",
         provider="elevenlabs",
-        provider_voice_id="21m00Tcm4TlvDq8ikWAM",
+        provider_voice_id="EXAVITQu4vr4xnSDxMaL",
         locale="ar-SA",
         dialect=None,
         gender="female",
@@ -96,7 +130,7 @@ ELEVENLABS_VOICES: list[VoiceConfig] = [
         supports_ssml=False,
         latency_class="low",
         fallback_voice_id="edge:ar-SA-female",
-        display_name="Rachel (multilingual, Arabic-capable)",
+        display_name="Sarah (multilingual, Arabic-capable)",
     ),
     VoiceConfig(
         id="elevenlabs:adam",

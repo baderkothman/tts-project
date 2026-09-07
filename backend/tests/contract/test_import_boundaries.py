@@ -7,7 +7,7 @@ BACKEND_APP = Path(__file__).resolve().parents[2] / "app"
 
 # Modules that are inherently provider-specific and MAY appear outside
 # providers/ only within providers/ itself.
-_PROVIDER_SDK_MODULES = {"edge_tts", "azure", "elevenlabs"}
+_PROVIDER_SDK_MODULES = {"edge_tts", "groq", "elevenlabs", "huggingface_hub"}
 
 
 def _imports_in(path: Path) -> set[str]:
@@ -35,7 +35,7 @@ def test_no_provider_sdk_outside_providers_package():
 
 def test_no_domain_module_branches_on_provider_name():
     """Services/text_processing must not contain an equality COMPARISON
-    against a provider-name string literal (`x == "edge"`, `x != "azure"`) —
+    against a provider-name string literal (`x == "edge"`, `x != "groq"`) —
     routing must use capability data, not provider identity.
 
     AST-based rather than a substring search: a substring check would also
@@ -43,7 +43,7 @@ def test_no_domain_module_branches_on_provider_name():
     value, a CLI default), which are not what Principle II prohibits.
     """
     domain_dirs = ["services", "text_processing"]
-    provider_names = {"edge", "azure", "elevenlabs"}
+    provider_names = {"edge", "groq", "elevenlabs", "huggingface"}
     violations = []
 
     for dirname in domain_dirs:
