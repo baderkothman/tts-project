@@ -1,32 +1,71 @@
 """FastAPI application entry point.
 
-No request text is ever logged; ProviderError is mapped to HTTP status
-without leaking secrets (Constitution VII).
+Loads `oddadmix/lahgtna-omnivoice-v2` exactly once, at startup, via
+`TTSEngine.load()` run off the event loop in a worker thread — the process
+accepts `/api/health` immediately and reports `status: "loading"` until the
+one-time load (weight download on first run, then just weight loading)
+finishes, rather than blocking the whole server on it.
+
+No request text or generated audio is ever logged.
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.app.api import speak
+from backend.app.api import tts
 from backend.app.config import get_settings
-from backend.app.providers.groq import GroqProvider
+from backend.app.services.inference import TTSEngine
 
-app = FastAPI(title="Saudi Arabic TTS Prototype", version="0.2.0")
-app.include_router(speak.router)
-
-_FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("lahgtna.main")
 
 
-@app.get("/health")
-async def health() -> dict:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     settings = get_settings()
-    provider = GroqProvider(api_key=settings.groq_api_key)
-    return {"status": "ok", "provider_available": provider.available()}
+    engine = TTSEngine(settings)
+    app.state.engine = engine
+
+    async def _load() -> None:
+        try:
+            await asyncio.to_thread(engine.load)
+        except Exception:  # noqa: BLE001 - already logged in TTSEngine.load
+            logger.error("Model failed to load — /api/tts will return 503 until this is fixed")
+
+    load_task = asyncio.create_task(_load())
+    try:
+        yield
+    finally:
+        load_task.cancel()
 
 
-if _FRONTEND_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
+app = FastAPI(
+    title="لهجتنا — Arabic Dialect TTS",
+    description="Arabic dialect text-to-speech, powered exclusively by oddadmix/lahgtna-omnivoice-v2.",
+    version="0.3.0",
+    lifespan=lifespan,
+)
+
+# Dev-time convenience only: allows `vite dev` on a different port to reach
+# the API directly. In production the frontend build is served from this
+# same origin (mounted below), so this never matters there.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(tts.router)
+
+_FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if _FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_DIST), html=True), name="frontend")

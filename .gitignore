@@ -13,6 +13,9 @@ node_modules/
 # Secrets (FR-039)
 .env
 
+# Downloaded model weights (oddadmix/lahgtna-omnivoice-v2, ~2.4GB) — never committed
+.hf_cache/
+
 # Generated audio — not persisted by default, except durable evidence saved
 # deliberately under docs/audio/ (docs/TTS_MODEL_EVALUATION.md)
 *.mp3

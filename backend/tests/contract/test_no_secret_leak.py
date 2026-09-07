@@ -1,23 +1,29 @@
-"""No credential value in any response, header, or error message (Constitution VII)."""
+"""No internal path, traceback, or secret ever reaches a client response."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from backend.app.providers.groq import GroqProvider
-
-
-def test_unavailable_reason_never_contains_key_value():
-    provider = GroqProvider(api_key="super-secret-value")
-    reason = provider.unavailable_reason()
-    assert reason is None  # available when a key is present
-    provider_no_key = GroqProvider(api_key=None)
-    assert "secret" not in (provider_no_key.unavailable_reason() or "").lower()
+from backend.app.services.fake_engine import FakeEngine
+from backend.tests.contract.conftest import make_client
 
 
-def test_env_example_has_no_credential_values():
-    text = Path(__file__).resolve().parents[3] / ".env.example"
-    content = text.read_text()
-    for line in content.splitlines():
-        if line.strip().startswith("GROQ_API_KEY="):
-            assert line.strip() == "GROQ_API_KEY=", "must have no value, names only"
+def test_generation_failure_does_not_leak_traceback():
+    client = make_client(FakeEngine(fail="generation_failed"))
+    resp = client.post("/api/tts", data={"text": "مرحبا"})
+    body = resp.text
+    assert "Traceback" not in body
+    assert "/Users/" not in body
+    assert ".py" not in body
+
+
+def test_invalid_input_error_does_not_leak_internals():
+    client = make_client(FakeEngine(fail="invalid_input"))
+    resp = client.post("/api/tts", data={"text": "مرحبا"})
+    assert "Traceback" not in resp.text
+    assert "site-packages" not in resp.text
+
+
+def test_model_info_never_includes_a_token_field():
+    client = make_client()
+    resp = client.get("/api/health")
+    assert "token" not in resp.text.lower()
+    assert "hf_token" not in resp.text.lower()

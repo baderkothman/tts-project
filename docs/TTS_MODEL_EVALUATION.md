@@ -1,3 +1,10 @@
+> **Superseded.** This phase (`002-saudi-tts-prototype`) selected Groq's hosted
+> `canopylabs/orpheus-arabic-saudi`. The project has since moved to a third phase that
+> uses exclusively `oddadmix/lahgtna-omnivoice-v2`, run locally — no hosted provider,
+> no Groq, no fallback. See the root `README.md` for the current architecture and
+> `backend/app/data/dialects.py` for how dialect selection actually works today. Kept
+> here as a real, dated record of why Groq was chosen at the time — not current.
+
 # Saudi Arabic TTS: Model & API Evaluation
 
 Every candidate below was either called live or checked directly against its own

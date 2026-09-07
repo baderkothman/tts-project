@@ -1,0 +1,131 @@
+/* ============================================================
+   لهجتنا — design tokens
+   Palette: warm stone paper + deep teal (Gulf/Red Sea water) +
+   brass accent (radio-dial), instead of the generic cream/terracotta
+   or near-black/neon defaults. See DESIGN.md for the full rationale.
+   ============================================================ */
+
+:root {
+  color-scheme: light dark;
+
+  --paper: #ede7d8;
+  --surface: #f7f3e9;
+  --surface-raised: #fffdf7;
+  --ink: #262019;
+  --ink-soft: #6b6154;
+  --ink-faint: #9b917f;
+  --line: #d9d0bc;
+  --line-strong: #c3b89e;
+
+  --teal: #1f5e5b;
+  --teal-deep: #163f3d;
+  --teal-soft: #d9e8e5;
+  --brass: #b8863b;
+  --brass-soft: #f0e2c4;
+  --clay: #a8402f;
+  --clay-soft: #f3ded9;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(38, 32, 25, 0.06);
+  --shadow-md: 0 6px 20px -8px rgba(38, 32, 25, 0.25);
+
+  --font-display: "Noto Naskh Arabic", "IBM Plex Sans Arabic", serif;
+  --font-body: "IBM Plex Sans Arabic", "IBM Plex Sans", system-ui, sans-serif;
+  --font-latin: "IBM Plex Sans", system-ui, sans-serif;
+
+  --container-width: 760px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #17180f;
+    --surface: #1f2117;
+    --surface-raised: #262819;
+    --ink: #ede7d8;
+    --ink-soft: #b3a892;
+    --ink-faint: #7d7462;
+    --line: #34362a;
+    --line-strong: #454736;
+
+    --teal: #4fa39e;
+    --teal-deep: #7fc4bf;
+    --teal-soft: #223634;
+    --brass: #d9a75c;
+    --brass-soft: #362c1a;
+    --clay: #d97a67;
+    --clay-soft: #3a231e;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 6px 24px -8px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+/* Latin/numeric fragments (ms, Hz, device names) inside RTL flow should not
+   have their internal digit order flipped by bidi reordering. */
+.ltr-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-latin);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
