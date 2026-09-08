@@ -75,14 +75,17 @@ What production should add on top of that:
   in front of the pipeline (small, CPU-viable model; this does **not** need to be Lahgtna
   itself). Only fall back to an explicit picker when detection confidence is low.
 - **Per-dialect diacritization correctness stays centralized.** The word-final i'rab
-  stripping (`diacritizer.py`, driven by `dialect_id`) already generalizes to all 13
-  dialects from one rule, not 13 special cases — keep that property; don't let a future
-  "dialect-specific" feature request turn this into 13 forked code paths.
-- **Known gaps stay known gaps in production, not silently fixed by omission.** Levantine
-  dialects (Palestinian/Lebanese/Syrian) share one language code (`apc`) in the installed
-  package, and Yemeni has none at all (README's "How dialect and voice actually work").
-  A production dialect-detector should route Yemeni to the same honest fallback+warning
-  this prototype already does, not hide the gap.
+  stripping (`diacritizer.py`, driven by `dialect_id`) already generalizes to all 9
+  exposed dialects from one rule, not 9 special cases — keep that property; don't let a
+  future "dialect-specific" feature request turn this into 9 forked code paths.
+- **Known gaps get removed, not silently shipped.** 4 dialects the model card marked
+  "completed" — Palestinian/Lebanese/Syrian (sharing one Levantine code, `apc`, with no
+  distinct conditioning) and Yemeni (no language code in the installed package at all) —
+  were shipped briefly with an honest warning, then removed outright after user feedback
+  that a dialect option producing no real conditioning isn't a working feature just
+  because it's disclosed (README's "How dialect and voice actually work"). A production
+  dialect-detector inherits the same 9-dialect ceiling, not a workaround for the 4 that
+  don't exist here.
 
 ## 4. Dynamic voice switching in production
 

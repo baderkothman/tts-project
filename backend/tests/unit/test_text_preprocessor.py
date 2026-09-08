@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 
+from backend.app.data.dialects import Dialect
 from backend.app.services import diacritizer, text_preprocessor
 
 
@@ -47,9 +48,15 @@ def test_mixed_text_produces_ordered_segments():
     assert languages == ["ar", "en", "ar"]
 
 
-def test_written_only_dialect_adds_warning():
-    result = text_preprocessor.preprocess("شلونك", dialect_id="yemeni", pipeline_mode="native")
-    assert any("Yemeni" in w for w in result.warnings)
+def test_written_only_dialect_adds_warning(monkeypatch):
+    # No currently-exposed dialect is written_only (the 4 that were —
+    # Palestinian/Lebanese/Syrian/Yemeni — were removed entirely; see
+    # data/dialects.py) — this synthetic entry keeps the warning mechanism
+    # itself covered for whatever future dialect might need it.
+    fake_dialect = Dialect(id="fake_written_only", name_en="Fakeish", name_ar="وهمية", language_code=None, written_only=True)
+    monkeypatch.setitem(text_preprocessor.DIALECT_BY_ID, "fake_written_only", fake_dialect)
+    result = text_preprocessor.preprocess("شلونك", dialect_id="fake_written_only", pipeline_mode="native")
+    assert any("Fakeish" in w for w in result.warnings)
 
 
 def test_msa_dialect_has_no_warning():

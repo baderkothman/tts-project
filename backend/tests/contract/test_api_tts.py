@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from backend.app.data import dialects
+from backend.app.data.dialects import Dialect
 from backend.app.services.fake_engine import FakeEngine
 from backend.tests.contract.conftest import make_client
 
@@ -31,6 +33,12 @@ def test_dialects_returns_only_documented_completed_dialects():
     # Every dialect the model card marks "planned" must never appear.
     assert "emirati" not in ids
     assert "kuwaiti" not in ids
+    # Removed for not producing real dialect conditioning — see
+    # data/dialects.py's REMOVED_UNRELIABLE_DIALECTS.
+    assert "palestinian" not in ids
+    assert "lebanese" not in ids
+    assert "syrian" not in ids
+    assert "yemeni" not in ids
     assert "saudi" in ids
     assert "egyptian" in ids
 
@@ -72,11 +80,18 @@ def test_voice_design_synthesis_succeeds():
     assert set(body["latency"]) == {"generation_ms", "audio_duration_ms", "real_time_factor"}
 
 
-def test_written_only_dialect_surfaces_a_warning():
+def test_written_only_dialect_surfaces_a_warning(monkeypatch):
+    # No currently-exposed dialect is written_only (the 4 that were —
+    # Palestinian/Lebanese/Syrian/Yemeni — were removed entirely for not
+    # working; see data/dialects.py) — this synthetic entry keeps the
+    # warning mechanism itself covered end-to-end through the real API.
+    fake_dialect = Dialect(id="fake_written_only", name_en="Fakeish", name_ar="وهمية", language_code=None, written_only=True)
+    monkeypatch.setitem(dialects.DIALECT_BY_ID, "fake_written_only", fake_dialect)
+
     client = make_client()
-    resp = client.post("/api/tts", data={"text": "شلونك", "dialect_id": "yemeni"})
+    resp = client.post("/api/tts", data={"text": "شلونك", "dialect_id": "fake_written_only"})
     assert resp.status_code == 200
-    assert any("Yemeni" in w for w in resp.json()["warnings"])
+    assert any("Fakeish" in w for w in resp.json()["warnings"])
 
 
 def test_clone_mode_without_reference_audio_is_400():

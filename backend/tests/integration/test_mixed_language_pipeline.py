@@ -79,9 +79,13 @@ async def test_transliteration_mode_produces_audio(pipeline: SpeechPipeline):
 
 
 async def test_diacritized_dialectal_text_generates(pipeline: SpeechPipeline):
+    # "lebanese" used to be here — removed from the dialect catalogue for
+    # not producing real dialect conditioning (see data/dialects.py); any
+    # real remaining dialect exercises this test's actual point equally
+    # well (diacritization on dialectal text), so swapped for "saudi".
     request = TTSRequest(
-        text="شو عم تعمل اليوم؟",
-        dialect_id="lebanese",
+        text="شلونك اليوم؟",
+        dialect_id="saudi",
         gender="male",
         quality="fast",
     )

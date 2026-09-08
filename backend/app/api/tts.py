@@ -156,7 +156,6 @@ async def _build_request(
     dialect_id: str,
     gender: str | None,
     pitch: str,
-    whisper: bool,
     ref_text: str | None,
     speed: float,
     quality: str,
@@ -176,7 +175,6 @@ async def _build_request(
             dialect_id=dialect_id,
             gender=gender,  # type: ignore[arg-type]
             pitch=pitch,  # type: ignore[arg-type]
-            whisper=whisper,
             ref_text=ref_text,
             speed=speed,
             quality=quality,  # type: ignore[arg-type]
@@ -217,7 +215,6 @@ async def synthesize(
     dialect_id: str = Form("msa"),
     gender: str | None = Form(None),
     pitch: str = Form("moderate pitch"),
-    whisper: bool = Form(False),
     ref_text: str | None = Form(None),
     speed: float = Form(1.0),
     quality: str = Form("high"),
@@ -233,7 +230,6 @@ async def synthesize(
         dialect_id=dialect_id,
         gender=gender,
         pitch=pitch,
-        whisper=whisper,
         ref_text=ref_text,
         speed=speed,
         quality=quality,
@@ -338,7 +334,6 @@ async def synthesize_stream(
     dialect_id: str = Form("msa"),
     gender: str | None = Form(None),
     pitch: str = Form("moderate pitch"),
-    whisper: bool = Form(False),
     ref_text: str | None = Form(None),
     speed: float = Form(1.0),
     quality: str = Form("high"),
@@ -360,7 +355,6 @@ async def synthesize_stream(
         dialect_id=dialect_id,
         gender=gender,
         pitch=pitch,
-        whisper=whisper,
         ref_text=ref_text,
         speed=speed,
         quality=quality,

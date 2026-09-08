@@ -5,9 +5,9 @@ Source of truth, in order of precedence:
 1. `oddadmix/lahgtna-omnivoice-v2`'s own model card roadmap
    (https://huggingface.co/oddadmix/lahgtna-omnivoice-v2) — the fine-tune's
    *own* claim of which dialects are "completed" versus merely "planned".
-   Only the 13 dialects marked completed are listed here; the roadmap's six
-   planned dialects (UAE, Kuwait, Qatar, Oman, Jordan, Mauritania) are
-   deliberately NOT exposed — a roadmap entry is not a shipped capability.
+   The roadmap's six planned dialects (UAE, Kuwait, Qatar, Oman, Jordan,
+   Mauritania) are deliberately NOT exposed — a roadmap entry is not a
+   shipped capability.
 2. The underlying `omnivoice` package's language resolver
    (`omnivoice.utils.lang_map.LANG_NAME_TO_ID`, inspected directly from the
    installed package source, not guessed), which is what
@@ -15,26 +15,25 @@ Source of truth, in order of precedence:
    dialect name to the ISO 639-3-ish code OmniVoice's base multilingual
    training used.
 
-Two real gaps, disclosed rather than papered over:
+Of the 13 dialects Lahgtna's own card marks "completed", 4 are removed here
+rather than exposed with a caveat — real user feedback that they "don't
+work" in practice, not just an academic gap:
 
-- The model has no fixed code specifically for "Palestinian", "Lebanese", or
-  "Syrian" — the underlying language map only has one shared code for
-  Levantine Arabic (`apc`). All three dialect selections resolve to that
-  same `apc` language conditioning; the distinction between them is carried
-  by the dialectal vocabulary/spelling the user actually types, not by a
-  separate model parameter (see the Lahgtna-specific caveat on
-  `Dialect.written_only`, below).
-- "Yemeni" is on Lahgtna's own "completed" list, but the installed
-  `omnivoice` package's language map has no Yemeni Arabic entry at all
+- **Palestinian, Lebanese, Syrian** had no dialect-specific code at all —
+  the underlying language map only has one shared code for Levantine Arabic
+  (`apc`), so all three resolved to the exact same conditioning. Selecting
+  any of the three did nothing to distinguish it from the others.
+- **Yemeni** has no language code in the installed package whatsoever
   (verified by reading `omnivoice/utils/lang_map.py` directly — every other
   entry in this table exists there character-for-character). Passing an
-  unrecognized language string to the real model silently falls back to
-  language-agnostic mode with a logged warning (`_resolve_language` in
-  `omnivoice/models/omnivoice.py`) rather than raising, so we do not pass a
-  fabricated code for it. It stays in the list because Lahgtna's own card
-  claims it, but `language_code` is `None` and `written_only` is `True`:
-  the UI must say plainly that dialect conditioning for it comes from the
-  Arabic text itself, not from a distinct backend parameter.
+  unrecognized language string silently falls back to language-agnostic
+  mode (`_resolve_language` in `omnivoice/models/omnivoice.py`), so the
+  option produced no real dialect conditioning at all.
+
+`Dialect.written_only` (below) is the mechanism that flagged these — kept
+in the model for any future dialect that ends up in the same situation, but
+nothing currently exposed uses it: every remaining dialect has its own
+distinct, verified language code.
 """
 
 from __future__ import annotations
@@ -58,38 +57,17 @@ class Dialect(BaseModel):
 
 # Ordered as on the model card. `language_code` values were read directly
 # from the installed `omnivoice` package's `LANG_NAME_TO_ID` map, not
-# invented — see module docstring for the two disclosed exceptions.
+# invented. Palestinian, Lebanese, Syrian, and Yemeni are deliberately
+# absent — see module docstring and REMOVED_UNRELIABLE_DIALECTS below.
 DIALECTS: list[Dialect] = [
     Dialect(id="egyptian", name_en="Egyptian", name_ar="مصرية", language_code="arz"),
     Dialect(id="saudi", name_en="Saudi (Najdi)", name_ar="سعودية (نجدية)", language_code="ars"),
     Dialect(id="moroccan", name_en="Moroccan", name_ar="مغربية", language_code="ary"),
     Dialect(id="iraqi", name_en="Iraqi", name_ar="عراقية", language_code="acm"),
     Dialect(id="sudanese", name_en="Sudanese", name_ar="سودانية", language_code="apd"),
-    Dialect(
-        id="palestinian",
-        name_en="Palestinian",
-        name_ar="فلسطينية",
-        language_code="apc",
-        written_only=True,
-    ),
-    Dialect(
-        id="lebanese",
-        name_en="Lebanese",
-        name_ar="لبنانية",
-        language_code="apc",
-        written_only=True,
-    ),
-    Dialect(
-        id="syrian",
-        name_en="Syrian",
-        name_ar="سورية",
-        language_code="apc",
-        written_only=True,
-    ),
     Dialect(id="libyan", name_en="Libyan", name_ar="ليبية", language_code="ayl"),
     Dialect(id="tunisian", name_en="Tunisian", name_ar="تونسية", language_code="aeb"),
     Dialect(id="bahraini", name_en="Bahraini", name_ar="بحرينية", language_code="abv"),
-    Dialect(id="yemeni", name_en="Yemeni", name_ar="يمنية", language_code=None, written_only=True),
     Dialect(id="algerian", name_en="Algerian", name_ar="جزائرية", language_code="arq"),
     Dialect(
         id="msa",
@@ -114,3 +92,10 @@ PLANNED_NOT_IMPLEMENTED = [
     "Jordan",
     "Mauritania",
 ]
+
+# The model card marks these 4 "completed," and this app shipped them
+# briefly, but they were removed after real user feedback that they don't
+# work — see module docstring for exactly why (shared/missing language
+# codes, no real dialect conditioning). Listed here for the same
+# traceability reason as PLANNED_NOT_IMPLEMENTED, above.
+REMOVED_UNRELIABLE_DIALECTS = ["Palestinian", "Lebanese", "Syrian", "Yemeni"]

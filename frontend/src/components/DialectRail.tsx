@@ -51,7 +51,10 @@ export function DialectRail({
         إعادة صياغة باللهجة عبر OpenAI (تشكيل تلقائي)
       </label>
       {aiRewrite && aiRewriteAvailable && (
-        <p className="field__hint">سيُرسل النص المكتوب إلى OpenAI لإعادة صياغته وتشكيله قبل التوليد.</p>
+        <p className="field__hint">
+          سيُرسل النص المكتوب إلى OpenAI لإعادة صياغته وتشكيله حسب اللهجة المختارة قبل
+          التوليد. أي كلمات إنجليزية تبقى كما هي دون ترجمة أو تحويل إلى حروف عربية.
+        </p>
       )}
       {!aiRewriteAvailable && (
         <p className="field__hint">غير متاحة على هذا الخادم — يتطلب إعداد OPENAI_API_KEY.</p>

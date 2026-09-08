@@ -54,7 +54,6 @@ export default function App() {
   const [dialectId, setDialectId] = useState(DEFAULT_DIALECT_ID);
   const [gender, setGender] = useState<Gender | null>("female");
   const [pitch, setPitch] = useState<Pitch>("moderate pitch");
-  const [whisper, setWhisper] = useState(false);
   const [refAudio, setRefAudio] = useState<File | null>(null);
   const [refText, setRefText] = useState("");
   const [speed, setSpeed] = useState(1);
@@ -133,7 +132,6 @@ export default function App() {
       dialect_id: dialectId,
       gender: mode === "voice_design" ? gender : null,
       pitch,
-      whisper: mode === "voice_design" ? whisper : false,
       ref_text: mode === "clone" ? refText || null : null,
       speed,
       quality,
@@ -141,7 +139,7 @@ export default function App() {
       ref_audio: mode === "clone" ? refAudio : null,
       ai_dialect_rewrite: aiDialectRewrite,
     }),
-    [text, mode, pipelineMode, dialectId, gender, pitch, whisper, refText, speed, quality, refAudio, aiDialectRewrite],
+    [text, mode, pipelineMode, dialectId, gender, pitch, refText, speed, quality, refAudio, aiDialectRewrite],
   );
 
   const handleGenerate = useCallback(async () => {
@@ -287,8 +285,6 @@ export default function App() {
               onGenderChange={setGender}
               pitch={pitch}
               onPitchChange={setPitch}
-              whisper={whisper}
-              onWhisperChange={setWhisper}
               refAudio={refAudio}
               onRefAudioChange={setRefAudio}
               refText={refText}

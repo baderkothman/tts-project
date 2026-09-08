@@ -84,7 +84,6 @@ function buildTtsForm(params: TTSRequestParams): FormData {
   form.set("dialect_id", params.dialect_id);
   if (params.gender) form.set("gender", params.gender);
   form.set("pitch", params.pitch);
-  form.set("whisper", String(params.whisper));
   if (params.ref_text) form.set("ref_text", params.ref_text);
   form.set("speed", String(params.speed));
   form.set("quality", params.quality);

@@ -28,7 +28,13 @@ class _FakeResponse:
 
 
 class _FakeResponses:
-    def __init__(self, *, result: str | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self, *, result: str | None = None, error: Exception | None = None, results: list[str] | None = None
+    ) -> None:
+        # `results`, when given, hands back a different canned string on
+        # each successive call (for the retry-then-succeed tests below);
+        # `result` is the simpler single-value case every other test uses.
+        self._results = list(results) if results is not None else None
         self._result = result
         self._error = error
         self.calls: list[dict] = []
@@ -37,12 +43,17 @@ class _FakeResponses:
         self.calls.append(kwargs)
         if self._error is not None:
             raise self._error
+        if self._results is not None:
+            text = self._results.pop(0) if self._results else self._results[-1]
+            return _FakeResponse(output_parsed=_FakeParsed(dialect_text=text))
         return _FakeResponse(output_parsed=_FakeParsed(dialect_text=self._result) if self._result is not None else None)
 
 
 class _FakeClient:
-    def __init__(self, *, result: str | None = None, error: Exception | None = None) -> None:
-        self.responses = _FakeResponses(result=result, error=error)
+    def __init__(
+        self, *, result: str | None = None, error: Exception | None = None, results: list[str] | None = None
+    ) -> None:
+        self.responses = _FakeResponses(result=result, error=error, results=results)
 
 
 async def test_maybe_rewrite_disabled_is_a_pure_passthrough(monkeypatch):
@@ -72,12 +83,12 @@ async def test_rewrite_without_api_key_raises_not_configured(monkeypatch):
 
 async def test_rewrite_success_returns_parsed_text_and_warns(monkeypatch):
     monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
-    fake_client = _FakeClient(result="هلا وربع، كيفك اليوم؟")
+    fake_client = _FakeClient(result="هَلا وَرْبَع، كَيْفَك اليَوْم؟")
     monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
 
     text, warnings = await dialect_rewriter.maybe_rewrite("مرحبا، كيف حالك اليوم؟", dialect_id="saudi", enabled=True)
 
-    assert text == "هلا وربع، كيفك اليوم؟"
+    assert text == "هَلا وَرْبَع، كَيْفَك اليَوْم؟"
     assert len(warnings) == 1
     assert "Saudi" in warnings[0]
     assert "gpt-5-mini" in warnings[0]
@@ -113,7 +124,9 @@ async def test_rewrite_empty_output_raises_invalid_input(monkeypatch):
 
 async def test_rewrite_wildly_long_output_raises_invalid_input(monkeypatch):
     monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
-    fake_client = _FakeClient(result="مرحبا " * 500)  # way past 4x the (short) input
+    # Fully diacritized so this exercises the length guard specifically,
+    # not the bare-word completeness check below.
+    fake_client = _FakeClient(result="مَرْحَبًا " * 500)  # way past 4x the (short) input
     monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
 
     with pytest.raises(dialect_rewriter.DialectRewriteError) as exc_info:
@@ -127,8 +140,8 @@ async def test_rewrite_wildly_long_output_raises_invalid_input(monkeypatch):
 
 
 def test_sanitize_strips_stray_control_characters():
-    assert dialect_rewriter._sanitize("مرحبا\x0f") == "مرحبا"
-    assert dialect_rewriter._sanitize("مرحبا\x00") == "مرحبا"
+    assert dialect_rewriter._sanitize("مَرْحَبًا\x0f") == "مَرْحَبًا"
+    assert dialect_rewriter._sanitize("مَرْحَبًا\x00") == "مَرْحَبًا"
 
 
 def test_sanitize_rejects_two_stacked_sentence_variants():
@@ -143,8 +156,8 @@ def test_sanitize_rejects_two_stacked_sentence_variants():
 
 
 def test_sanitize_tolerates_a_single_trailing_blank_line():
-    assert dialect_rewriter._sanitize("مرحبا\n") == "مرحبا"
-    assert dialect_rewriter._sanitize("مرحبا\n\n") == "مرحبا"
+    assert dialect_rewriter._sanitize("مَرْحَبًا\n") == "مَرْحَبًا"
+    assert dialect_rewriter._sanitize("مَرْحَبًا\n\n") == "مَرْحَبًا"
 
 
 async def test_rewrite_rejects_multi_line_output_from_the_api(monkeypatch):
@@ -159,11 +172,11 @@ async def test_rewrite_rejects_multi_line_output_from_the_api(monkeypatch):
 
 async def test_rewrite_strips_stray_control_characters_from_the_api(monkeypatch):
     monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
-    fake_client = _FakeClient(result="تقدر تساعدني؟\x0f")
+    fake_client = _FakeClient(result="تِقْدَر تِساعِدْني؟\x0f")
     monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
 
     result = await dialect_rewriter.rewrite("تقدر تساعدني؟", dialect_id="egyptian")
-    assert result == "تقدر تساعدني؟"
+    assert result == "تِقْدَر تِساعِدْني؟"
 
 
 # Speaker-gender agreement — folded into the same call, only when the
@@ -173,7 +186,7 @@ async def test_rewrite_strips_stray_control_characters_from_the_api(monkeypatch)
 
 async def test_rewrite_without_gender_omits_the_gender_clause(monkeypatch):
     monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
-    fake_client = _FakeClient(result="مرحبا")
+    fake_client = _FakeClient(result="مَرْحَبًا")
     monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
 
     await dialect_rewriter.rewrite("مرحبا", dialect_id="saudi")  # gender defaults to None
@@ -184,7 +197,7 @@ async def test_rewrite_without_gender_omits_the_gender_clause(monkeypatch):
 
 async def test_rewrite_with_gender_includes_a_scoped_gender_clause(monkeypatch):
     monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
-    fake_client = _FakeClient(result="مرحبا")
+    fake_client = _FakeClient(result="مَرْحَبًا")
     monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
 
     await dialect_rewriter.rewrite("مرحبا", dialect_id="saudi", gender="female")
@@ -198,7 +211,7 @@ async def test_rewrite_with_gender_includes_a_scoped_gender_clause(monkeypatch):
 
 async def test_maybe_rewrite_passes_gender_through(monkeypatch):
     monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
-    fake_client = _FakeClient(result="مرحبا")
+    fake_client = _FakeClient(result="مَرْحَبًا")
     monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
 
     text, warnings = await dialect_rewriter.maybe_rewrite(
@@ -207,3 +220,89 @@ async def test_maybe_rewrite_passes_gender_through(monkeypatch):
     system_content = fake_client.responses.calls[0]["input"][0]["content"]
     assert "male" in system_content
     assert any("male" in w for w in warnings)
+
+
+# Embedded English stays English — never translated, and (after a reversed
+# earlier decision) never transliterated into Arabic letters either. See
+# module docstring for the reversal's history.
+
+
+async def test_prompt_instructs_leaving_english_untouched():
+    system_content = dialect_rewriter._SYSTEM_PROMPT.format(
+        name_en="Saudi (Najdi)", name_ar="سعودية (نجدية)", gender_clause=""
+    )
+    assert "do NOT translate" in system_content
+    assert "do NOT" in system_content and "transliterate" in system_content
+    assert "leave them exactly as they are" in system_content
+
+
+async def test_prompt_no_longer_asks_for_arabic_script_transliteration():
+    # Real reversal: an earlier prompt iteration asked the model to convert
+    # embedded English into Arabic-script phonetic spelling ("meeting" ->
+    # "ميتنج"). Direct user feedback reversed that — English must now stay
+    # in Latin script untouched, so none of that old instruction's language
+    # should remain.
+    system_content = dialect_rewriter._SYSTEM_PROMPT.format(
+        name_en="Saudi (Najdi)", name_ar="سعودية (نجدية)", gender_clause=""
+    )
+    assert "phonetic transliteration" not in system_content
+    assert "ميتنج" not in system_content
+    assert "entirely in Arabic script" not in system_content
+
+
+# Diacritics-completeness backstop — real, reproduced failure modes where
+# the model's own diacritization fell short of the prompt's instructions.
+
+
+def test_sanitize_repairs_a_word_left_completely_bare(monkeypatch):
+    # A real fix, not a rejection: an earlier version of this function
+    # raised an error on a bare word instead of using this app's own local
+    # diacritizer to fix it — real user-visible failure surfaced for
+    # something the app already had the tooling to just handle. `diacritize`
+    # is faked here (bracket-wraps its input) to keep this test fast and
+    # offline; the real function is exercised in test_diacritizer.py.
+    def fake_diacritize(text, *, dialect_id="msa"):
+        return f"[{text}]", True
+
+    monkeypatch.setattr(dialect_rewriter.diacritizer, "diacritize", fake_diacritize)
+    result = dialect_rewriter._sanitize("عندي مِيتِنْج مُهِمّ اليَوْم")
+    assert result == "[عندي] مِيتِنْج مُهِمّ اليَوْم"
+
+
+def test_sanitize_tolerates_short_undiacritized_function_words():
+    # 1-2 letter particles ("و", "لـ"...) are sometimes left unmarked even
+    # in otherwise fully-vocalized output — only real (3+ letter) words are
+    # held to the completeness check.
+    assert dialect_rewriter._sanitize("و مَرْحَبًا") == "و مَرْحَبًا"
+
+
+def test_sanitize_applies_the_case_ending_backstop_for_non_msa_dialects():
+    # The model followed the "no i'rab" instruction for most of the
+    # sentence but left one classical case ending in place — real,
+    # reproduced behavior (see module docstring). The deterministic rule
+    # from diacritizer.py must still strip it even though the model didn't.
+    result = dialect_rewriter._sanitize("اليومُ عِندي مِيتِنْج مُهِمّ.", dialect_id="bahraini")
+    assert result == "اليوم عِندي مِيتِنْج مُهِمّ."
+
+
+def test_sanitize_does_not_touch_case_endings_for_msa():
+    result = dialect_rewriter._sanitize("اليومُ عِندي اجتِماعٌ مُهِمّ.", dialect_id="msa")
+    assert result == "اليومُ عِندي اجتِماعٌ مُهِمّ."
+
+
+async def test_rewrite_repairs_a_bare_word_in_one_call_without_retrying(monkeypatch):
+    # A bare word is repaired inline by `_sanitize` (via the local
+    # diacritizer), so it never needs to look like a failed API call at
+    # all — one call in, one call out, no retry.
+    monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
+    fake_client = _FakeClient(result="عندي مِيتِنْج مُهِمّ اليَوْم")
+    monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
+
+    def fake_diacritize(text, *, dialect_id="msa"):
+        return f"[{text}]", True
+
+    monkeypatch.setattr(dialect_rewriter.diacritizer, "diacritize", fake_diacritize)
+
+    result = await dialect_rewriter.rewrite("عندي اجتماع مهم اليوم", dialect_id="saudi")
+    assert result == "[عندي] مِيتِنْج مُهِمّ اليَوْم"
+    assert len(fake_client.responses.calls) == 1

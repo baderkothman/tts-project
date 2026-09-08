@@ -58,6 +58,18 @@ _HAS_DIACRITIC_RE = re.compile(f"[{_DIACRITIC_CHARS}]")
 # the module docstring only concerns the case-ending vowel/tanween itself.
 _TRAILING_VOWEL_RE = re.compile("[ًٌٍَُِ]+$")
 
+# U+0621-U+064A are the Arabic letters, U+064B-U+0652 are the eight tashkeel
+# marks, contiguous with the letters in that one block; U+0670 (dagger alif)
+# is a vowel mark outside it. Anything NOT in this set trailing a word is
+# punctuation/whitespace/Latin text stuck to it with no space — e.g. a
+# period right after a case-ending kasra ("بِالشِّرْكِةِ."), or Arabic
+# punctuation like `؟`/`،`/`؛`, which sit just *below* this range in the
+# codepage and so are correctly treated as non-core too. Splitting this off
+# first lets `_TRAILING_VOWEL_RE` above stay a simple `$`-anchored match
+# against the real end of the Arabic content, rather than needing its own
+# lookahead — trailing punctuation is reattached unchanged afterward.
+_TRAILING_NON_ARABIC_RE = re.compile("[^ء-ْٰ]*$")
+
 _lock = threading.Lock()
 _model = None
 _tokenizer = None
@@ -109,11 +121,26 @@ def load_error() -> str | None:
     return _load_error
 
 
-def _strip_word_final_irab(text: str) -> str:
+def strip_dialectal_case_endings(text: str) -> str:
     """Drop only the last diacritic run of each whitespace-delimited word —
-    the grammatical case ending — leaving internal (stem) vowels intact."""
-    words = text.split(" ")
-    return " ".join(_TRAILING_VOWEL_RE.sub("", w) for w in words)
+    the grammatical case ending (i'rab) — leaving internal (stem) vowels
+    intact. Public (not `_`-prefixed): used both by `_diacritize_line` below
+    (after this module's own model runs) and, as a deterministic backstop,
+    by `dialect_rewriter.py` on text an LLM already diacritized — an LLM
+    prompt is a request, not a guarantee, and this rule is cheap and exact
+    enough to enforce in code rather than trust to a model's compliance."""
+
+    def _strip_word(word: str) -> str:
+        # Peel off any trailing punctuation/Latin text stuck directly to
+        # the word first, so the vowel-stripping regex below always lines
+        # up against the real end of the Arabic content, not a period or
+        # question mark sitting after it.
+        match = _TRAILING_NON_ARABIC_RE.search(word)
+        suffix = match.group(0) if match else ""
+        core = word[: len(word) - len(suffix)] if suffix else word
+        return _TRAILING_VOWEL_RE.sub("", core) + suffix
+
+    return " ".join(_strip_word(w) for w in text.split(" "))
 
 
 def _max_new_tokens(input_len: int) -> int:
@@ -201,6 +228,6 @@ def _diacritize_line(text: str, dialect_id: str) -> tuple[str, bool]:
         # rather than failing the whole request over a non-essential step.
         return text, False
     if dialect_id != "msa":
-        result = _strip_word_final_irab(result)
+        result = strip_dialectal_case_endings(result)
     result = leading_ws + result + trailing_ws
     return result, True

@@ -1,6 +1,6 @@
 # لهجتنا — Arabic Dialect Text-to-Speech
 
-Type Arabic text — Modern Standard or one of 13 real dialects, optionally mixed with
+Type Arabic text — Modern Standard or one of 9 real dialects, optionally mixed with
 English — pick a voice by attribute (gender, pitch) or clone one from a short
 reference clip, and hear it spoken with automatic diacritization and natural-sounding
 embedded English. Speech synthesis itself is powered **exclusively** by
@@ -65,35 +65,55 @@ This model has **no fixed, named voice roster** — verified by reading the inst
 one of three real, mutually exclusive modes (`OmniVoice.generate()`):
 
 1. **Voice design** — an `instruct` string built from a closed, validated vocabulary:
-   gender (`male`/`female`), pitch, and whisper style. Passing anything outside that
-   vocabulary raises an error inside the package itself — this app's UI only exposes what
-   is actually in that enum. The package's vocabulary also has an `age` category
-   ("child"/"teenager"/"young adult"/"middle-aged"/"elderly") that this app deliberately
-   does *not* expose: a controlled test against this exact fine-tuned checkpoint (5 real
-   generations per category, F0 measured directly, ANOVA + pairwise t-tests) found the 3
-   middle categories statistically indistinguishable from each other (p=0.36-0.56) — see
-   `backend/app/data/voice_design.py`'s module docstring for the full numbers. Rather than
-   ship a control that mostly does nothing, no age instruct is ever sent; every voice_design
-   request gets the checkpoint's own untagged default.
+   gender (`male`/`female`) and pitch. Passing anything outside that vocabulary raises an
+   error inside the package itself — this app's UI only exposes what is actually in that
+   enum. Two categories the package's vocabulary also supports are deliberately not exposed:
+   - `age` ("child"/"teenager"/"young adult"/"middle-aged"/"elderly") — a controlled test
+     against this exact fine-tuned checkpoint (5 real generations per category, F0 measured
+     directly, ANOVA + pairwise t-tests) found the 3 middle categories statistically
+     indistinguishable from each other (p=0.36-0.56) — see
+     `backend/app/data/voice_design.py`'s module docstring for the full numbers. Rather than
+     ship a control that mostly does nothing, no age instruct is ever sent.
+   - `whisper` style — removed from the UI/API for scope, not a measured defect like age
+     above; the package itself still accepts it as an instruct value.
 2. **Voice cloning** — a 3–10s reference audio clip (+ optional transcript, auto-transcribed
    via Whisper if omitted).
 3. **Auto** — the model picks a voice with no guidance.
 
+**There is no tone/emotion instruct** — checked directly against the installed package
+source (`omnivoice.utils.voice_design._INSTRUCT_CATEGORIES`), not assumed: the entire closed
+vocabulary is gender, age, pitch, whisper, an English-only accent list, and a Mandarin-only
+regional-dialect list. None of those categories is "happy"/"sad"/"expressive" or any other
+tone control, and inventing one to expose in the UI would violate the "no invented
+capabilities" rule this whole section is named after. The one real, measured lever for
+perceived flatness turned out to be a generation parameter, not an instruct keyword:
+`class_temperature` (token-sampling temperature for the diffusion audio head) defaults to
+`0.0` in the package — fully greedy, deterministic decoding — and was never overridden here
+until now. A direct controlled comparison against this exact checkpoint (same text/instruct,
+4 real generations per condition, F0 measured via `librosa.pyin`) found `class_temperature=0.7`
+raised mean F0 standard deviation from ~26.5 Hz to ~43.6 Hz (+~65% relative, i.e. less
+monotone) — real and directionally consistent, though with only 4 reps per condition it
+didn't reach significance (Welch t-test p=0.107). `services/inference.py` now sends
+`class_temperature=0.6` by default (a moderate pick given that uncertainty) instead of the
+package's own `0.0`; intelligibility at this setting wasn't separately re-measured (only
+prosodic variation was), so treat it as a reasoned default worth revisiting with more data,
+not a settled result.
+
 **Dialect is a separate parameter** (`language`), not part of the voice-design instruct
 string (an earlier assumption during this project that dialect would be an instruct
 keyword was wrong — verified by reading the package's own instruct validator, which
-rejects anything not in that gender/pitch/whisper/accent/age list). `backend/app/data/dialects.py`
-maps each of the 13 dialects `oddadmix/lahgtna-omnivoice-v2`'s own model card marks
+rejects anything not in that gender/pitch/age/whisper/accent list). `backend/app/data/dialects.py`
+maps 9 of the 13 dialects `oddadmix/lahgtna-omnivoice-v2`'s own model card marks
 **completed** (not the six it marks merely *planned* — those are never exposed) to the
-real ISO-ish language code the installed package's language resolver accepts. Two honest
-gaps, not papered over:
+real ISO-ish language code the installed package's language resolver accepts, plus MSA.
 
-- Palestinian, Lebanese, and Syrian share one underlying code (`apc`, Levantine Arabic) —
-  the model has no distinct parameter for each; the dialectal vocabulary you actually type
-  carries that distinction.
-- Yemeni has no language code in the installed package at all, despite being on Lahgtna's
-  own "completed" list. Selecting it falls back to language-agnostic mode with a warning
-  surfaced in the UI, rather than silently pretending it's conditioned like the other 12.
+The other 4 — **Palestinian, Lebanese, Syrian, and Yemeni** — were shipped briefly and then
+removed after real user feedback that they don't work: Palestinian/Lebanese/Syrian shared one
+underlying code (`apc`, Levantine Arabic) with no distinct parameter to tell them apart, and
+Yemeni has no language code in the installed package at all — selecting it silently fell back
+to language-agnostic mode. Rather than keep 4 dialect options that produce no real dialect
+conditioning, they were removed outright; see `data/dialects.py`'s module docstring and
+`REMOVED_UNRELIABLE_DIALECTS` for the full record.
 
 `GET /api/voices` reflects this honestly too — it returns the real gender/pitch
 options, not a fabricated list of named speakers.
@@ -128,10 +148,26 @@ enabled, `services/dialect_rewriter.py` sends the typed text and chosen dialect 
 docstring for why "minimal" was tried and rejected: faster but measurably unreliable, real
 garbled/doubled output sampled directly against the live API) and gets back the sentence
 rewritten in that dialect's real wording, fully diacritized for how it's actually spoken (no
-MSA case endings on dialectal words — the same rule the local diacritizer enforces, carried
-into the prompt instead). That output is then used as-is; the local Fine-Tashkeel diacritizer
-already refuses to re-diacritize text that already carries diacritics (see above), so no
-special-case bypass was needed to satisfy "use the AI output as-is."
+MSA case endings on dialectal words — the same rule the local diacritizer enforces). That
+output is then used as-is; the local Fine-Tashkeel diacritizer already refuses to
+re-diacritize text that already carries diacritics (see above), so no special-case bypass was
+needed to satisfy "use the AI output as-is."
+
+**The prompt's own diacritics instructions are not trusted as sufficient on their own** —
+real, reproduced live-API sampling found the model sometimes left a word completely
+undiacritized while the rest of the sentence was fully vocalized, and sometimes let a
+classical MSA case ending (i'rab) slip through for a dialect that shouldn't have one (e.g. a
+Bahraini rewrite with a stray `ُ`/`ِ` case ending intact). Two backstops now sit between the
+model's output and TTS, in `dialect_rewriter._sanitize`:
+
+- **A deterministic case-ending strip** (`diacritizer.strip_dialectal_case_endings` — the
+  exact same rule the local, non-AI diacritization path already enforces) runs on every
+  non-MSA rewrite regardless of what the model did, so a missed "no i'rab" instruction can't
+  reach TTS.
+- **A completeness check** rejects a rewrite that leaves any real (3+ letter) Arabic word
+  with zero diacritic marks, and `rewrite()` retries the API call once automatically before
+  giving up — a sporadic generation glitch, not something a deterministic rule can repair
+  after the fact (there's no diacritic to insert for a whole bare word from the outside).
 
 The same call also fixes **speaker-gender agreement** when a voice gender is chosen
 (`voice_design` mode, male/female — not "auto" or `clone`, which have no gender to agree
@@ -143,17 +179,26 @@ gives them; only self-reference follows the voice. (Real rule-based Arabic morph
 this is genuinely hard to get right — the same reasoning that put dialect rewriting itself
 behind a model instead of a dictionary.)
 
+**Embedded English is left exactly as typed** — never translated, and never transliterated
+into Arabic script. An earlier iteration of this prompt *did* convert embedded English into
+Arabic-script phonetic spelling (e.g. "meeting" → "ميتنج"); direct user feedback reversed
+that decision, so the current prompt explicitly instructs the model to leave any Latin-script
+word untouched, and only rewrite/diacritize the surrounding Arabic. This also matches the one
+already-existing behavior for mixed-language text everywhere else in the app — `native`
+pipeline mode (below) already leaves English segments as-is.
+
 - **Opt-in, never automatic** — no request is silently rewritten, no surprise OpenAI cost.
 - **Disclosed, not hidden** — the toggle's own hint text says the text will be sent to
   OpenAI; the footer names this as the one exception to the local-only claim above.
 - **Fails loudly, not silently** — if `OPENAI_API_KEY` is missing or the call fails while
   the toggle is on, `/api/tts` returns an error (503/502) instead of quietly falling back
   to unrewritten text the user didn't ask for.
-- **Validated directly against the live API while building this**, not just mocked: both the
-  dialect rewrite and the gender-agreement scoping (self vs. addressee vs. third person, across
-  MSA/Saudi/Egyptian, both voice genders) were sampled against the real endpoint — see git
-  history for the specific cases. Broader native-speaker dialect-authenticity evaluation the
-  way diacritization got (`docs/DIACRITIZATION_EVALUATION.md`) hasn't been done.
+- **Validated directly against the live API while building this**, not just mocked: the
+  dialect rewrite, the gender-agreement scoping (self vs. addressee vs. third person, across
+  MSA/Saudi/Egyptian, both voice genders), the case-ending backstop, and the completeness
+  retry were all sampled against the real endpoint — see git history for the specific cases.
+  Broader native-speaker dialect-authenticity evaluation the way diacritization got
+  (`docs/DIACRITIZATION_EVALUATION.md`) hasn't been done.
 - **The "ready to speak" preview and the actual generation are two independent calls** — the
   live preview (`POST /api/preprocess`, debounced as you type) and `POST /api/tts` each make
   their own OpenAI call when this is on, and the model isn't deterministic: two calls with
@@ -196,7 +241,7 @@ is simply spoken as Arabic from then on.
 GET  /api/health        status, whether Lahgtna finished loading, device
 GET  /api/model-info    repo id, architecture, device, sample rate, capabilities, pipeline modes,
                          diacritizer/English-TTS load status, dialect_rewriter_configured
-GET  /api/dialects      the 13 real dialects + MSA
+GET  /api/dialects      the 9 real dialects + MSA
 GET  /api/voices        gender/pitch options (no named-voice roster — see above)
 POST /api/preprocess    JSON: text + dialect_id + pipeline_mode + ai_dialect_rewrite -> processed
                          text + per-segment breakdown, no audio generated (the UI's live preview)
@@ -349,7 +394,7 @@ backend/app/
 │   └── fake_engine.py          # deterministic test double (no model weights needed)
 ├── models/tts.py             # TTSRequest/TTSResponse/PreprocessRequest/PreprocessResponse/...
 └── data/
-    ├── dialects.py            # the 13 real dialects + MSA, sourced as described above
+    ├── dialects.py            # the 9 real dialects + MSA, sourced as described above
     ├── voice_design.py         # the real gender/pitch/age enum, read from the installed package
     └── pronunciation_overrides.json  # editable term -> Arabic-pronunciation overrides
 

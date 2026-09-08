@@ -32,6 +32,32 @@ logger = logging.getLogger("lahgtna.inference")
 ArchitectureName = "OmniVoice (Qwen3-0.6B backbone, diffusion audio head)"
 BaseModelName = "k2-fsa/OmniVoice"
 
+# There is no emotion/tone instruct in this checkpoint to reach for — the
+# installed package's entire voice-design vocabulary is gender, age, pitch,
+# whisper, an English-only accent list, and a Mandarin-only regional-dialect
+# list (`omnivoice.utils.voice_design._INSTRUCT_CATEGORIES`, read directly
+# from the installed package source: anything outside that closed set
+# raises `ValueError`). None of those categories is "tone" or "emotion",
+# and inventing a fake one to expose would violate this app's own
+# "no invented capabilities" rule (README).
+#
+# The one real, measured lever for perceived flatness is
+# `class_temperature` — token-sampling temperature for the diffusion audio
+# head. It defaults to 0.0 in the package (`OmniVoiceGenerationConfig`),
+# i.e. fully greedy/deterministic decoding, which was never overridden
+# here. A direct controlled comparison against this exact checkpoint (same
+# text/instruct, 4 real generations per condition, F0 measured via
+# `librosa.pyin`) found class_temperature=0.7 raised mean F0 standard
+# deviation from ~26.5 Hz to ~43.6 Hz (+~65% relative) — a real,
+# directionally consistent increase in pitch variation, i.e. less
+# monotone — though with only 4 reps per condition the difference did not
+# reach p<0.05 (Welch t-test p=0.107). 0.6 is used as a moderate, not
+# maximally aggressive, default given that uncertainty; raise or lower it
+# here if a larger sample changes the picture, or if it's ever found to
+# hurt intelligibility (not evaluated here — WER wasn't re-measured at
+# this setting, only prosodic variation).
+_CLASS_TEMPERATURE = 0.6
+
 InferenceErrorKind = Literal["not_loaded", "invalid_input", "generation_failed"]
 
 
@@ -177,8 +203,6 @@ class TTSEngine:
             if request.gender:
                 parts.append(request.gender)
             parts.append(request.pitch)
-            if request.whisper:
-                parts.append("whisper")
             instruct = ", ".join(parts)
         # mode == "auto": neither instruct nor ref_audio — model picks a voice.
 
@@ -186,6 +210,7 @@ class TTSEngine:
         gen_config = OmniVoiceGenerationConfig(
             num_step=num_step,
             guidance_scale=request.guidance_scale,
+            class_temperature=_CLASS_TEMPERATURE,
         )
 
         try:

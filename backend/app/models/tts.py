@@ -43,7 +43,6 @@ class TTSRequest(BaseModel):
     dialect_id: str = DEFAULT_DIALECT_ID
     gender: Gender | None = None
     pitch: Pitch = DEFAULT_PITCH
-    whisper: bool = False
 
     # Opt-in AI dialect rewrite (services/dialect_rewriter.py) — off by
     # default. When true, the text is rewritten into `dialect_id`'s wording

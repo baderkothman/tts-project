@@ -9,8 +9,6 @@ interface VoicePanelProps {
   onGenderChange: (g: Gender | null) => void;
   pitch: Pitch;
   onPitchChange: (p: Pitch) => void;
-  whisper: boolean;
-  onWhisperChange: (w: boolean) => void;
   refAudio: File | null;
   onRefAudioChange: (f: File | null) => void;
   refText: string;
@@ -97,18 +95,6 @@ export function VoicePanel(props: VoicePanelProps) {
               aria-valuetext={PITCH_LABELS[props.pitch]}
             />
           </div>
-
-          <details className="disclosure">
-            <summary>خيارات إضافية</summary>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={props.whisper}
-                onChange={(e) => props.onWhisperChange(e.target.checked)}
-              />
-              نبرة همس (whisper)
-            </label>
-          </details>
         </div>
       )}
     </div>

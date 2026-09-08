@@ -23,19 +23,28 @@ def test_has_diacritics_false_for_plain_text():
 def test_strip_word_final_irab_keeps_stem_vowels():
     # "نَرُوحُ" -> drop only the trailing damma (the case ending); the stem
     # vowels on ن and ر must survive.
-    assert diacritizer._strip_word_final_irab("نَرُوحُ") == "نَرُوح"
+    assert diacritizer.strip_dialectal_case_endings("نَرُوحُ") == "نَرُوح"
 
 
 def test_strip_word_final_irab_preserves_shadda():
     # Real reproduced case: shadda is gemination, not a case ending, and
     # must never be stripped even when it's the last mark on the word.
-    assert diacritizer._strip_word_final_irab("عَمَّ") == "عَمَّ"
+    assert diacritizer.strip_dialectal_case_endings("عَمَّ") == "عَمَّ"
 
 
 def test_strip_word_final_irab_strips_tanween():
     # Real reproduced bug: the model added a genitive tanween to a
     # colloquial verb ("go") that isn't inflected that way in speech.
-    assert diacritizer._strip_word_final_irab("رُوحٍ") == "رُوح"
+    assert diacritizer.strip_dialectal_case_endings("رُوحٍ") == "رُوح"
+
+
+def test_strip_word_final_irab_strips_case_ending_before_trailing_punctuation():
+    # Real reproduced case (AI dialect rewrite path): a case-ending vowel
+    # right before attached punctuation ("...بِالشِّرْكِةِ.") used to survive
+    # because the old regex only matched a diacritic at the literal end of
+    # the string — never one followed by a period.
+    assert diacritizer.strip_dialectal_case_endings("بِالشِّرْكِةِ.") == "بِالشِّرْكِة."
+    assert diacritizer.strip_dialectal_case_endings("اليومُ؟") == "اليوم؟"
 
 
 def test_diacritize_skips_already_diacritized_text(monkeypatch):

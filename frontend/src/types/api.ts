@@ -97,7 +97,6 @@ export interface TTSRequestParams {
   dialect_id: string;
   gender: Gender | null;
   pitch: Pitch;
-  whisper: boolean;
   ref_text: string | null;
   speed: number;
   quality: Quality;

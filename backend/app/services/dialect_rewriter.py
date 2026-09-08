@@ -21,6 +21,22 @@ keeps whatever gender the text already gives them, regardless of the
 voice's gender — the voice's gender describes who is speaking, not who is
 being spoken to or about.
 
+Embedded English (or other Latin-script) words are deliberately left
+untouched — never translated, and (after a brief detour) never
+transliterated into Arabic letters either. An earlier iteration of this
+prompt *did* ask the model to convert embedded English into Arabic-script
+phonetic spelling (e.g. "meeting" -> "ميتنج"), on the theory that it would
+read more naturally next to conventional Arabic spellings of common
+loanwords. Direct user feedback reversed that: English words should stay
+exactly as typed, in Latin script. That's also the one already-existing
+behavior for mixed-language text everywhere else in the app —
+`text_preprocessor.py`'s `native` pipeline mode already leaves English
+segments untouched (only `pipeline_mode="transliteration"`, which the
+frontend does not currently expose, converts English at all, via a
+separate rule-based pass in `services/transliterator.py`) — so this module
+no longer needs to do anything special with English; it simply doesn't
+rewrite or diacritize what isn't Arabic.
+
 This is the one place in the app that talks to an external, paid API. It is
 never required: `is_configured()` reports honestly when `OPENAI_API_KEY`
 isn't set (surfaced via `/api/model-info`), and `maybe_rewrite()` is a
@@ -35,11 +51,35 @@ already-diacritized rewrite from here flows untouched through the existing
 `text_preprocessor` pipeline — no bypass flag needed anywhere else in the
 app for the "use the AI output as-is" requirement.
 
-The prompt below also carries forward `diacritizer.py`'s point 2 (no
-classical i'rab case endings for non-MSA dialects, since real dialectal
-speech doesn't pronounce them) as an instruction to the model instead of a
-post-hoc string strip — there is no local pass left afterward that could do
-that stripping for us here.
+The prompt asks the model for `diacritizer.py`'s same point 2 (no classical
+i'rab case endings for non-MSA dialects, since real dialectal speech
+doesn't pronounce them) directly, but a prompt is a request, not a
+guarantee — sampled live traffic showed the model sometimes complies only
+partially (a correctly-stripped sentence with one stray case ending left on
+a word, or occasionally the full MSA case-ending pattern reappearing
+outright). `_sanitize()` below therefore reapplies
+`diacritizer.strip_dialectal_case_endings()` — the exact same deterministic
+rule the local (non-AI) pipeline already enforces — to every non-MSA
+rewrite, regardless of what the model actually did. This is the one place
+in the pipeline where the model's own diacritization is not simply trusted
+as final: everything else about the rewrite (wording, vocabulary, which
+words even get diacritics) is still entirely the model's output.
+
+`_sanitize()` also catches a rewrite that leaves any real Arabic word
+completely bare (no diacritic marks at all) while the rest of the sentence
+is vocalized — a real, reproduced partial-diacritization failure mode,
+distinct from the case-ending issue above. Unlike that one, this failure
+*is* repairable without another round trip to the model: this app already
+has a local diacritizer (`diacritizer.diacritize()`) sitting right there
+for the non-AI path, and it works just as well on a single bare word
+mid-sentence as it does on a whole undiacritized input — `_repair_bare_words()`
+below runs exactly that. An earlier version of this behavior instead raised
+an error and left `rewrite()` to retry the whole API call once before
+giving up, which meant a persistent case (the model reliably mis-handling
+one particular word) surfaced as a visible failure to the user instead of
+getting fixed. `rewrite()` still retries once for the one failure mode that
+genuinely has no local fix — the model hedging with two stacked sentence
+variants (see failure mode 2 above).
 """
 
 from __future__ import annotations
@@ -53,6 +93,7 @@ from pydantic import BaseModel
 
 from backend.app.config import get_settings
 from backend.app.data.dialects import DIALECT_BY_ID
+from backend.app.services import diacritizer
 
 logger = logging.getLogger("lahgtna.dialect_rewriter")
 
@@ -83,15 +124,28 @@ _SYSTEM_PROMPT = (
     "natural, everyday {name_en} Arabic ({name_ar}) — real colloquial vocabulary, "
     "phrasing, and word order a native speaker of that dialect would actually say, "
     "while preserving the original meaning exactly. Do not add or drop information. "
-    "Then add full Arabic diacritics (tashkeel) to your rewritten sentence, matching "
-    "how it is actually spoken in that dialect: do not add classical grammatical "
-    "case-ending diacritics (i'rab) that dialectal speech does not pronounce — only "
-    "MSA takes full case endings. If the target is Modern Standard Arabic itself, "
-    "keep the wording formal (a near-identity rewrite) and use standard MSA "
-    "diacritics including case endings. "
+    "If the input contains any English (or other Latin-script) words, names, or "
+    "phrases, leave them exactly as they are, written in English/Latin script — do "
+    "NOT translate them and do NOT transliterate them into Arabic letters. Only the "
+    "surrounding Arabic wording is yours to rewrite; any embedded Latin-script text "
+    "passes through completely untouched, unchanged, in its original spelling. "
+    "Then add full Arabic diacritics (tashkeel) to every word of the Arabic portion "
+    "of the rewritten sentence — every single letter that takes a vowel must carry "
+    "one, including a sukūn on a letter that carries no vowel at all; never leave "
+    "any Arabic word without diacritics while others around it have them. Diacritics "
+    "must match how the sentence is actually spoken in that dialect: never place a "
+    "classical grammatical case-ending diacritic (i'rab) — a final damma, kasra, "
+    "fatha, or any tanween that marks grammatical case — on the last letter of a "
+    "word, since dialectal speech does not pronounce these; only Modern Standard "
+    "Arabic takes full case endings. The last letter of most words should instead "
+    "carry a sukūn, or whatever short vowel is actually pronounced there in that "
+    "dialect, never a grammatical case marker. Do not add diacritics to any "
+    "Latin-script word — it stays exactly as written. "
+    "If the target is Modern Standard Arabic itself, keep the wording formal (a "
+    "near-identity rewrite) and use standard MSA diacritics including case endings. "
     "{gender_clause}"
     "Respond with only the rewritten, diacritized Arabic text — no explanation, "
-    "no quotes, no transliteration, nothing else."
+    "no quotes, nothing else."
 )
 
 # Only inserted when the request has an explicit voice gender (voice_design
@@ -155,47 +209,68 @@ async def rewrite(text: str, *, dialect_id: str, gender: str | None = None) -> s
     name_ar = dialect.name_ar if dialect else dialect_id
     gender_clause = _GENDER_CLAUSE.format(gender=gender) if gender else ""
 
-    try:
-        response = await _client().responses.parse(
-            model=settings.openai_model,
-            input=[
-                {
-                    "role": "system",
-                    "content": _SYSTEM_PROMPT.format(name_en=name_en, name_ar=name_ar, gender_clause=gender_clause),
-                },
-                # The user's own text, kept out of the instruction channel —
-                # just data to transform, not something that can redefine
-                # the task above (AGENTS.md: never interpolate untrusted
-                # data into system/developer instructions).
-                {"role": "user", "content": text},
-            ],
-            text_format=_Rewrite,
-            # Measured directly against the real API while building this:
-            # gpt-5-mini's default reasoning effort took 15-40s on this
-            # trivial rewrite/diacritize task — enough to blow past
-            # `openai_timeout_s` on a non-trivial fraction of requests.
-            # "minimal" cut that to ~1-3s but was measurably unreliable
-            # (~1 in 3 sampled calls returned two stacked sentence variants
-            # or a stray control character in the field) — "low" measured
-            # clean across the same repeated sampling at ~2-12s, a real
-            # trade of some latency for output the app can actually trust.
-            # `_sanitize()` below is still the real backstop either way —
-            # effort level is a reliability *lever*, not a correctness
-            # guarantee for an LLM's output.
-            reasoning={"effort": "low"},
-        )
-    except Exception as exc:  # noqa: BLE001 - any OpenAI SDK/network failure (timeout, rate limit, ...)
-        logger.warning("Dialect rewrite request failed (%s)", type(exc).__name__)
-        raise DialectRewriteError("upstream_error", "AI dialect rewrite failed — try again in a moment") from exc
+    prompt = _SYSTEM_PROMPT.format(name_en=name_en, name_ar=name_ar, gender_clause=gender_clause)
 
-    parsed = response.output_parsed
-    raw = parsed.dialect_text if parsed else ""
-    result = _sanitize(raw)
-    if not result:
-        raise DialectRewriteError("invalid_input", "AI dialect rewrite returned no usable text")
-    if len(result) > _MAX_OUTPUT_RATIO * max(len(text), 1):
-        raise DialectRewriteError("invalid_input", "AI dialect rewrite returned an unexpectedly long result")
-    return result
+    async def _call() -> str:
+        try:
+            response = await _client().responses.parse(
+                model=settings.openai_model,
+                input=[
+                    {"role": "system", "content": prompt},
+                    # The user's own text, kept out of the instruction channel —
+                    # just data to transform, not something that can redefine
+                    # the task above (AGENTS.md: never interpolate untrusted
+                    # data into system/developer instructions).
+                    {"role": "user", "content": text},
+                ],
+                text_format=_Rewrite,
+                # Measured directly against the real API while building this:
+                # gpt-5-mini's default reasoning effort took 15-40s on this
+                # trivial rewrite/diacritize task — enough to blow past
+                # `openai_timeout_s` on a non-trivial fraction of requests.
+                # "minimal" cut that to ~1-3s but was measurably unreliable
+                # (~1 in 3 sampled calls returned two stacked sentence variants
+                # or a stray control character in the field) — "low" measured
+                # clean across the same repeated sampling at ~2-12s, a real
+                # trade of some latency for output the app can actually trust.
+                # `_sanitize()` below is still the real backstop either way —
+                # effort level is a reliability *lever*, not a correctness
+                # guarantee for an LLM's output.
+                reasoning={"effort": "low"},
+            )
+        except Exception as exc:  # noqa: BLE001 - any OpenAI SDK/network failure (timeout, rate limit, ...)
+            logger.warning("Dialect rewrite request failed (%s)", type(exc).__name__)
+            raise DialectRewriteError("upstream_error", "AI dialect rewrite failed — try again in a moment") from exc
+
+        parsed = response.output_parsed
+        return parsed.dialect_text if parsed else ""
+
+    # Up to two attempts total, but the retry only fires for a
+    # content-quality problem (empty output, a multi-line hedge, or a word
+    # left completely bare of diacritics) — a sporadic generation glitch
+    # worth one more try, not a systematic failure. Transport-level
+    # failures (`upstream_error`, raised inside `_call` above) are never
+    # retried here: the OpenAI client already retries those itself
+    # (`max_retries=2` on the client in `_client()`), and a second attempt
+    # after a timeout would just double the wait for something not caused
+    # by the response content at all.
+    last_error: DialectRewriteError | None = None
+    for attempt in range(2):
+        try:
+            result = _sanitize(await _call(), dialect_id=dialect_id)
+        except DialectRewriteError as exc:
+            if exc.kind != "invalid_input":
+                raise
+            last_error = exc
+            continue
+        if not result:
+            last_error = DialectRewriteError("invalid_input", "AI dialect rewrite returned no usable text")
+            continue
+        if len(result) > _MAX_OUTPUT_RATIO * max(len(text), 1):
+            raise DialectRewriteError("invalid_input", "AI dialect rewrite returned an unexpectedly long result")
+        return result
+    assert last_error is not None  # loop only exits without returning by hitting `continue` at least once
+    raise last_error
 
 
 # C0/C1 control characters, excluding the plain whitespace ones ('\t', '\n')
@@ -206,26 +281,83 @@ async def rewrite(text: str, *, dialect_id: str, gender: str | None = None) -> s
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
-def _sanitize(raw: str) -> str:
-    """Defends against two real, reproduced failure modes of this call that
-    a valid JSON schema does nothing to prevent: (1) stray control-byte
-    artifacts appended to an otherwise-fine string, and (2) the model
-    hedging with *two* stacked sentence variants (typically one MSA-flavored,
-    one dialectal) in the single `dialect_text` field, separated by a
-    newline — which would otherwise flow straight into TTS and get spoken
-    twice, back to back, with no indication anything was wrong.
+# A word is "real Arabic content" worth checking for diacritics once it has
+# at least this many Arabic letters — short 1-2 letter function words
+# (و "and", بـ/لـ-prefixed particles) are sometimes left unmarked even by a
+# fully-vocalized rendering, so checking those would produce false
+# positives on otherwise-correct output.
+_MIN_LETTERS_FOR_DIACRITIC_CHECK = 3
+_ARABIC_LETTER_RE = re.compile("[ء-ي]")
 
-    (2) is deliberately *not* repaired by picking one line — there is no
-    reliable way to know which line is the intended one, and shipping a
-    guess is worse than the caller (maybe_rewrite -> the API layer) turning
-    it into a normal `invalid_input` the user can just retry."""
+
+def _is_bare_word(word: str) -> bool:
+    return len(_ARABIC_LETTER_RE.findall(word)) >= _MIN_LETTERS_FOR_DIACRITIC_CHECK and not diacritizer.has_diacritics(
+        word
+    )
+
+
+def _repair_bare_words(text: str, *, dialect_id: str) -> str:
+    """Fixes failure mode (3) from `_sanitize`'s docstring: a word the AI
+    rewrite left completely undiacritized while the rest of the sentence
+    was fully vocalized. There *is* a diacritic source available for a
+    single bare word from outside the model that generated it — the local
+    Fine-Tashkeel diacritizer this app already runs for the non-AI path.
+    `diacritizer.diacritize()` only refuses to touch text that *already*
+    has a diacritic somewhere in it (see its own module docstring) — a
+    genuinely bare word has none, so it runs normally, including this same
+    dialect's i'rab (case-ending) stripping. An earlier version of this
+    function gave up and raised an error here instead, surfacing a visible
+    failure to the user for something this app had the means to just fix."""
+    return " ".join(
+        diacritizer.diacritize(word, dialect_id=dialect_id)[0] if _is_bare_word(word) else word
+        for word in text.split(" ")
+    )
+
+
+def _sanitize(raw: str, *, dialect_id: str = "msa") -> str:
+    """Defends against three real, reproduced failure modes of this call
+    that a valid JSON schema does nothing to prevent:
+
+    1. Stray control-byte artifacts appended to an otherwise-fine string.
+    2. The model hedging with *two* stacked sentence variants (typically one
+       MSA-flavored, one dialectal) in the single `dialect_text` field,
+       separated by a newline — which would otherwise flow straight into
+       TTS and get spoken twice, back to back, with no indication anything
+       was wrong. Deliberately *not* repaired by picking one line — there
+       is no reliable way to know which line is the intended one, and
+       shipping a guess is worse than the caller (`rewrite`'s retry, then
+       `maybe_rewrite` -> the API layer) turning it into a normal
+       `invalid_input` that gets one automatic retry.
+    3. A rewrite that fully diacritizes most of the sentence but leaves one
+       or more real Arabic words completely bare — a partial-diacritization
+       glitch distinct from (2). Unlike (2), this one *is* repairable
+       without another round trip to the model: `_repair_bare_words` below
+       runs the bare word(s) through this app's own local diacritizer
+       instead. An earlier version of this function raised an error here
+       the same way as (2) — visibly failing a request over something this
+       app already had the tooling to just fix.
+
+    For any non-MSA dialect, this is also where the deterministic i'rab
+    (case-ending) backstop from `diacritizer.py` gets applied to the rest
+    of the sentence — see this module's docstring for why the prompt's own
+    instruction not to use case endings isn't trusted as sufficient on its
+    own."""
     cleaned = _CONTROL_CHAR_RE.sub("", raw).strip()
     lines = [line for line in cleaned.splitlines() if line.strip()]
     if len(lines) > 1:
         raise DialectRewriteError(
             "invalid_input", "AI dialect rewrite returned more than one sentence variant"
         )
-    return lines[0].strip() if lines else ""
+    result = lines[0].strip() if lines else ""
+    if not result:
+        return result
+
+    if any(_is_bare_word(word) for word in result.split(" ")):
+        result = _repair_bare_words(result, dialect_id=dialect_id)
+
+    if dialect_id != "msa":
+        result = diacritizer.strip_dialectal_case_endings(result)
+    return result
 
 
 async def maybe_rewrite(

@@ -8,17 +8,27 @@ model actually accepts.
 
 from __future__ import annotations
 
-from backend.app.data.dialects import DIALECT_BY_ID, DIALECTS, PLANNED_NOT_IMPLEMENTED
+from backend.app.data.dialects import (
+    DIALECTS,
+    PLANNED_NOT_IMPLEMENTED,
+    REMOVED_UNRELIABLE_DIALECTS,
+)
 
 # Snapshot of the installed omnivoice package's actual Arabic-relevant
-# LANG_NAME_TO_ID entries at the time this catalogue was written.
+# LANG_NAME_TO_ID entries at the time this catalogue was written. `apc`
+# (Levantine) is no longer used by anything exposed here — see
+# REMOVED_UNRELIABLE_DIALECTS — but is left in this whitelist since it's
+# still a real, valid code in the installed package.
 _KNOWN_VALID_CODES = {"arz", "ars", "ary", "acm", "apd", "apc", "ayl", "aeb", "abv", "arq", "arb"}
 
 
-def test_thirteen_completed_dialects_plus_msa():
-    # Lahgtna's own model card marks exactly 13 dialects "completed"; MSA is
-    # this app's own addition as the always-available baseline.
-    assert len(DIALECTS) == 14
+def test_nine_reliable_dialects_plus_msa():
+    # Lahgtna's own model card marks 13 dialects "completed", but 4
+    # (Palestinian/Lebanese/Syrian/Yemeni) were removed after real user
+    # feedback that they don't work — see data/dialects.py's module
+    # docstring and REMOVED_UNRELIABLE_DIALECTS. MSA is this app's own
+    # addition as the always-available baseline.
+    assert len(DIALECTS) == 10
 
 
 def test_every_dialect_id_is_unique():
@@ -34,13 +44,13 @@ def test_language_codes_are_either_none_or_verified_real():
             )
 
 
-def test_written_only_dialects_have_no_code_or_a_shared_one():
-    # Palestinian/Lebanese/Syrian share Levantine's apc code; Yemeni has none.
-    assert DIALECT_BY_ID["yemeni"].language_code is None
-    assert DIALECT_BY_ID["yemeni"].written_only is True
-    for dialect_id in ("palestinian", "lebanese", "syrian"):
-        assert DIALECT_BY_ID[dialect_id].language_code == "apc"
-        assert DIALECT_BY_ID[dialect_id].written_only is True
+def test_no_currently_exposed_dialect_is_written_only():
+    # The mechanism still exists in the Dialect model for any future
+    # dialect that ends up sharing/lacking a code the way the 4 removed
+    # ones did, but nothing currently shipped needs it: every exposed
+    # dialect has its own distinct, verified language code.
+    assert all(not d.written_only for d in DIALECTS)
+    assert all(d.language_code is not None for d in DIALECTS)
 
 
 def test_planned_dialects_are_documented_but_never_selectable():
@@ -48,3 +58,10 @@ def test_planned_dialects_are_documented_but_never_selectable():
     implemented_names = {d.name_en.lower() for d in DIALECTS}
     for planned in PLANNED_NOT_IMPLEMENTED:
         assert planned.lower() not in implemented_names
+
+
+def test_removed_unreliable_dialects_are_documented_but_never_selectable():
+    assert "Palestinian" in REMOVED_UNRELIABLE_DIALECTS
+    implemented_names = {d.name_en.lower() for d in DIALECTS}
+    for removed in REMOVED_UNRELIABLE_DIALECTS:
+        assert removed.lower() not in implemented_names
