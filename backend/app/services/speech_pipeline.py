@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from backend.app.models.tts import TTSRequest
-from backend.app.services import audio_merger, english_tts, text_preprocessor
+from backend.app.services import audio_merger, dialect_rewriter, english_tts, text_preprocessor
 from backend.app.services.inference import InferenceError, TTSEngine
 from backend.app.services.sentence_splitter import split_sentences
 
@@ -52,10 +52,21 @@ class SpeechPipeline:
         self._arabic_engine = arabic_engine
 
     async def synthesize(self, request: TTSRequest, *, ref_audio_bytes: bytes | None) -> PipelineResult:
-        preview = text_preprocessor.preprocess(
-            request.text, dialect_id=request.dialect_id, pipeline_mode=request.pipeline_mode
+        # DialectRewriteError propagates uncaught here, exactly like
+        # InferenceError does below — the API layer (api/tts.py) catches
+        # both by their shared (kind, message) shape.
+        working_text, rewrite_warnings = await dialect_rewriter.maybe_rewrite(
+            request.text,
+            dialect_id=request.dialect_id,
+            enabled=request.ai_dialect_rewrite,
+            # Gender only means anything in voice_design mode — a cloned
+            # voice's gender comes from the reference clip, not this field.
+            gender=request.gender if request.mode == "voice_design" else None,
         )
-        warnings = list(preview.warnings)
+        preview = text_preprocessor.preprocess(
+            working_text, dialect_id=request.dialect_id, pipeline_mode=request.pipeline_mode
+        )
+        warnings = rewrite_warnings + preview.warnings
         has_english = any(s.language == "en" for s in preview.segments)
 
         if request.pipeline_mode == "dual_model" and request.mode == "clone" and has_english:
@@ -80,16 +91,29 @@ class SpeechPipeline:
         if use_dual_model:
             result = await self._synthesize_dual_model(request, preview)
         else:
-            result = await self._synthesize_single_call(request, preview, ref_audio_bytes)
+            result = await self._synthesize_single_call(request, preview, working_text, ref_audio_bytes)
 
         result.warnings = warnings + result.warnings
         result.preview = preview
         return result
 
     async def _synthesize_single_call(
-        self, request: TTSRequest, preview: text_preprocessor.PreprocessResult, ref_audio_bytes: bytes | None
+        self,
+        request: TTSRequest,
+        preview: text_preprocessor.PreprocessResult,
+        working_text: str,
+        ref_audio_bytes: bytes | None,
     ) -> PipelineResult:
-        effective_text = preview.processed_text.strip() or request.text
+        # Falls back to `working_text` — not `request.text` — when
+        # preprocessing produces nothing speakable: `working_text` is
+        # already the AI-rewritten dialectal text when ai_dialect_rewrite
+        # is on (identical to request.text otherwise, so this changes
+        # nothing for the common case). Real bug this fixes: with
+        # `request.text` here, an edge case where `preview.processed_text`
+        # comes back empty silently spoke the *original, un-rewritten,
+        # un-diacritized* MSA input instead — defeating the whole feature
+        # exactly when its fallback path mattered most.
+        effective_text = preview.processed_text.strip() or working_text
         modified_request = request.model_copy(update={"text": effective_text})
         gen = await self._arabic_engine.generate(modified_request, ref_audio_bytes=ref_audio_bytes)
         return PipelineResult(samples=gen.samples, sample_rate=gen.sample_rate, warnings=list(gen.warnings))
@@ -141,15 +165,21 @@ class SpeechPipeline:
         caller asked for something else, exactly like the existing
         dual_model+clone fallback above.
         """
-        preview = text_preprocessor.preprocess(
-            request.text, dialect_id=request.dialect_id, pipeline_mode=request.pipeline_mode
+        working_text, rewrite_warnings = await dialect_rewriter.maybe_rewrite(
+            request.text,
+            dialect_id=request.dialect_id,
+            enabled=request.ai_dialect_rewrite,
+            gender=request.gender if request.mode == "voice_design" else None,
         )
-        text = preview.processed_text.strip() or request.text
+        preview = text_preprocessor.preprocess(
+            working_text, dialect_id=request.dialect_id, pipeline_mode=request.pipeline_mode
+        )
+        text = preview.processed_text.strip() or working_text
         chunks = split_sentences(text)
         if not chunks:
             raise InferenceError("invalid_input", "No speakable text after preprocessing")
 
-        warnings = list(preview.warnings)
+        warnings = rewrite_warnings + preview.warnings
         if request.pipeline_mode != "native":
             warnings.append(
                 "Streaming always speaks through the Arabic model alone (like native mode); "

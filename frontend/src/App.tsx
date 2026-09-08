@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, base64ToArrayBuffer, getDialects, getHealth, synthesizeSpeech } from "./api/client";
+import { ApiError, base64ToArrayBuffer, getDialects, getHealth, getModelInfo, synthesizeSpeech } from "./api/client";
 import { AudioPlayer } from "./components/AudioPlayer";
 import { DialectRail } from "./components/DialectRail";
 import { ErrorBanner } from "./components/ErrorBanner";
@@ -13,7 +13,6 @@ import { usePreprocessPreview } from "./hooks/usePreprocessPreview";
 import { useStreamingSynthesis } from "./hooks/useStreamingSynthesis";
 import "./app.css";
 import type {
-  AgeGroup,
   Dialect,
   Gender,
   HealthResponse,
@@ -55,7 +54,6 @@ export default function App() {
   const [dialectId, setDialectId] = useState(DEFAULT_DIALECT_ID);
   const [gender, setGender] = useState<Gender | null>("female");
   const [pitch, setPitch] = useState<Pitch>("moderate pitch");
-  const [age, setAge] = useState<AgeGroup | null>(null);
   const [whisper, setWhisper] = useState(false);
   const [refAudio, setRefAudio] = useState<File | null>(null);
   const [refText, setRefText] = useState("");
@@ -66,6 +64,9 @@ export default function App() {
   // "native" (let the Arabic model speak embedded English words itself) is
   // used unconditionally.
   const pipelineMode: PipelineMode = "native";
+
+  const [aiDialectRewrite, setAiDialectRewrite] = useState(false);
+  const [aiRewriteAvailable, setAiRewriteAvailable] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,10 +104,25 @@ export default function App() {
       .catch(() => setDialects([]));
   }, []);
 
+  // /api/model-info 503s until the TTS model finishes loading, so this
+  // waits for health to report "ok" rather than firing once on mount.
+  useEffect(() => {
+    if (health?.status !== "ok") return;
+    getModelInfo()
+      .then((info) => setAiRewriteAvailable(info.dialect_rewriter_configured))
+      .catch(() => setAiRewriteAvailable(false));
+  }, [health?.status]);
+
   const selectedDialect = useMemo(() => dialects.find((d) => d.id === dialectId) ?? null, [dialects, dialectId]);
 
   const modelReady = health?.status === "ok";
-  const { preview, loading: previewLoading } = usePreprocessPreview(text, dialectId, pipelineMode);
+  const { preview, loading: previewLoading, setPreview } = usePreprocessPreview(
+    text,
+    dialectId,
+    pipelineMode,
+    aiDialectRewrite,
+    mode === "voice_design" ? gender : null,
+  );
   const { state: streamState, start: startStream, stop: stopStream } = useStreamingSynthesis();
 
   const buildTtsParams = useCallback(
@@ -117,15 +133,15 @@ export default function App() {
       dialect_id: dialectId,
       gender: mode === "voice_design" ? gender : null,
       pitch,
-      age: mode === "voice_design" ? age : null,
       whisper: mode === "voice_design" ? whisper : false,
       ref_text: mode === "clone" ? refText || null : null,
       speed,
       quality,
       guidance_scale: 2.0,
       ref_audio: mode === "clone" ? refAudio : null,
+      ai_dialect_rewrite: aiDialectRewrite,
     }),
-    [text, mode, pipelineMode, dialectId, gender, pitch, age, whisper, refText, speed, quality, refAudio],
+    [text, mode, pipelineMode, dialectId, gender, pitch, whisper, refText, speed, quality, refAudio, aiDialectRewrite],
   );
 
   const handleGenerate = useCallback(async () => {
@@ -140,7 +156,8 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const response = await synthesizeSpeech(buildTtsParams());
+      const params = buildTtsParams();
+      const response = await synthesizeSpeech(params);
 
       const buffer = base64ToArrayBuffer(response.audio_base64);
       const blob = new Blob([buffer], { type: response.content_type });
@@ -152,6 +169,19 @@ export default function App() {
       setResult(response);
       setAudioUrl(url);
       setAudioBuffer(buffer);
+      // Make the "ready to be spoken" panel authoritative for the audio
+      // that just loaded: /api/tts ran its own, independent preprocessing
+      // pass (a fresh OpenAI call when AI dialect rewrite is on), which can
+      // legitimately return different wording than the live preview's last
+      // pass — this is what was actually spoken, so it must be what's shown.
+      // `params.text` (not the possibly-since-edited `text` state) is what
+      // this specific response corresponds to.
+      setPreview({
+        original_text: params.text,
+        processed_text: response.processed_text,
+        segments: response.segments,
+        warnings: response.warnings,
+      });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(translateError(err.message));
@@ -245,6 +275,9 @@ export default function App() {
               dialects={dialects.length ? dialects : FALLBACK_DIALECTS}
               selectedId={dialectId}
               onSelect={setDialectId}
+              aiRewrite={aiDialectRewrite}
+              onAiRewriteChange={setAiDialectRewrite}
+              aiRewriteAvailable={aiRewriteAvailable}
             />
 
             <VoicePanel
@@ -254,8 +287,6 @@ export default function App() {
               onGenderChange={setGender}
               pitch={pitch}
               onPitchChange={setPitch}
-              age={age}
-              onAgeChange={setAge}
               whisper={whisper}
               onWhisperChange={setWhisper}
               refAudio={refAudio}
@@ -275,11 +306,12 @@ export default function App() {
 
         <footer className="page__footer">
           <p>
-            مدعوم حصرًا بنموذج{" "}
+            التوليد الصوتي مدعوم حصرًا بنموذج{" "}
             <span className="ltr-num" dir="ltr">
               oddadmix/lahgtna-omnivoice-v2
             </span>{" "}
-            — يعمل محليًا بالكامل، بلا أي مزوّد خارجي.
+            ويعمل محليًا بالكامل. إعادة الصياغة اللهجية الاختيارية عبر OpenAI هي الاستثناء الوحيد
+            الذي يُرسل النص إلى مزوّد خارجي.
           </p>
         </footer>
       </div>

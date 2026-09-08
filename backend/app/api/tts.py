@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.app.config import get_settings
 from backend.app.data.dialects import DIALECTS, Dialect
-from backend.app.data.voice_design import AGE_OPTIONS, GENDER_OPTIONS, PITCH_OPTIONS
+from backend.app.data.voice_design import GENDER_OPTIONS, PITCH_OPTIONS
 from backend.app.models.tts import (
     HealthResponse,
     LatencyInfo,
@@ -32,16 +32,21 @@ from backend.app.models.tts import (
     TTSRequest,
     TTSResponse,
 )
-from backend.app.services import text_preprocessor
+from backend.app.services import dialect_rewriter, text_preprocessor
 from backend.app.services.audio import duration_ms, encode_wav
+from backend.app.services.dialect_rewriter import DialectRewriteError
 from backend.app.services.inference import ArchitectureName, BaseModelName, InferenceError
 
 router = APIRouter(prefix="/api", tags=["tts"])
 
+# Shared by InferenceError and DialectRewriteError — both are (kind,
+# message) exceptions, so one table maps either's `.kind` to a status code.
 _ERROR_STATUS = {
     "not_loaded": 503,
     "invalid_input": 400,
     "generation_failed": 502,
+    "not_configured": 503,
+    "upstream_error": 502,
 }
 
 
@@ -83,6 +88,7 @@ async def model_info(request: Request) -> ModelInfo:
         pipeline_modes=["native", "dual_model", "transliteration"],
         diacritizer_loaded=diacritizer.is_loaded(),
         english_tts_loaded=english_tts.is_loaded(),
+        dialect_rewriter_configured=dialect_rewriter.is_configured(),
     )
 
 
@@ -100,9 +106,8 @@ async def voices() -> dict:
         "supports_voice_cloning": True,
         "gender_options": GENDER_OPTIONS,
         "pitch_options": PITCH_OPTIONS,
-        "age_options": AGE_OPTIONS,
         "note": (
-            "This model has no fixed speaker roster. Choose a gender/pitch/age combination "
+            "This model has no fixed speaker roster. Choose a gender/pitch combination "
             "(voice design) or upload a short reference clip (voice cloning) instead."
         ),
     }
@@ -119,15 +124,27 @@ def _segment_infos(segments) -> list[SegmentInfo]:
 async def preprocess(body: PreprocessRequest) -> PreprocessResponse:
     """Text-only "what will actually be spoken" preview — no audio, no GPU
     call beyond the (cached) diacritizer, so the UI can show this live as
-    the user types without waiting on a full generation."""
+    the user types without waiting on a full generation.
+
+    When `ai_dialect_rewrite` is set, this also calls OpenAI (see
+    `dialect_rewriter.py`) before previewing — so the live preview matches
+    what `/api/tts` will actually speak, at the cost of one OpenAI call per
+    debounced keystroke pause while the toggle is on."""
+    try:
+        working_text, rewrite_warnings = await dialect_rewriter.maybe_rewrite(
+            body.text, dialect_id=body.dialect_id, enabled=body.ai_dialect_rewrite, gender=body.gender
+        )
+    except DialectRewriteError as exc:
+        raise HTTPException(status_code=_ERROR_STATUS[exc.kind], detail=exc.message) from exc
+
     result = text_preprocessor.preprocess(
-        body.text, dialect_id=body.dialect_id, pipeline_mode=body.pipeline_mode
+        working_text, dialect_id=body.dialect_id, pipeline_mode=body.pipeline_mode
     )
     return PreprocessResponse(
         original_text=result.original_text,
         processed_text=result.processed_text,
         segments=_segment_infos(result.segments),
-        warnings=result.warnings,
+        warnings=rewrite_warnings + result.warnings,
     )
 
 
@@ -139,13 +156,13 @@ async def _build_request(
     dialect_id: str,
     gender: str | None,
     pitch: str,
-    age: str | None,
     whisper: bool,
     ref_text: str | None,
     speed: float,
     quality: str,
     guidance_scale: float,
     ref_audio: UploadFile | None,
+    ai_dialect_rewrite: bool = False,
 ) -> tuple[TTSRequest, bytes | None]:
     """Shared by `/tts` and `/tts/stream`: build+validate the typed request
     and read/validate the optional reference-audio upload. Kept as one
@@ -159,12 +176,12 @@ async def _build_request(
             dialect_id=dialect_id,
             gender=gender,  # type: ignore[arg-type]
             pitch=pitch,  # type: ignore[arg-type]
-            age=age,  # type: ignore[arg-type]
             whisper=whisper,
             ref_text=ref_text,
             speed=speed,
             quality=quality,  # type: ignore[arg-type]
             guidance_scale=guidance_scale,
+            ai_dialect_rewrite=ai_dialect_rewrite,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -200,13 +217,13 @@ async def synthesize(
     dialect_id: str = Form("msa"),
     gender: str | None = Form(None),
     pitch: str = Form("moderate pitch"),
-    age: str | None = Form(None),
     whisper: bool = Form(False),
     ref_text: str | None = Form(None),
     speed: float = Form(1.0),
     quality: str = Form("high"),
     guidance_scale: float = Form(2.0),
     ref_audio: UploadFile | None = File(None),
+    ai_dialect_rewrite: bool = Form(False),
 ) -> TTSResponse:
     pipeline = request.app.state.pipeline
     tts_request, ref_audio_bytes = await _build_request(
@@ -216,19 +233,19 @@ async def synthesize(
         dialect_id=dialect_id,
         gender=gender,
         pitch=pitch,
-        age=age,
         whisper=whisper,
         ref_text=ref_text,
         speed=speed,
         quality=quality,
         guidance_scale=guidance_scale,
         ref_audio=ref_audio,
+        ai_dialect_rewrite=ai_dialect_rewrite,
     )
 
     t0_generation = time.perf_counter()
     try:
         result = await pipeline.synthesize(tts_request, ref_audio_bytes=ref_audio_bytes)
-    except InferenceError as exc:
+    except (InferenceError, DialectRewriteError) as exc:
         raise HTTPException(status_code=_ERROR_STATUS[exc.kind], detail=exc.message) from exc
     generation_ms = (time.perf_counter() - t0_generation) * 1000.0
 
@@ -294,7 +311,7 @@ async def _stream_events(pipeline, tts_request: TTSRequest, ref_audio_bytes: byt
                     "warnings": chunk.warnings,
                 },
             )
-    except InferenceError as exc:
+    except (InferenceError, DialectRewriteError) as exc:
         yield _sse("error", {"kind": exc.kind, "message": exc.message})
         return
 
@@ -321,13 +338,13 @@ async def synthesize_stream(
     dialect_id: str = Form("msa"),
     gender: str | None = Form(None),
     pitch: str = Form("moderate pitch"),
-    age: str | None = Form(None),
     whisper: bool = Form(False),
     ref_text: str | None = Form(None),
     speed: float = Form(1.0),
     quality: str = Form("high"),
     guidance_scale: float = Form(2.0),
     ref_audio: UploadFile | None = File(None),
+    ai_dialect_rewrite: bool = Form(False),
 ) -> StreamingResponse:
     """Sentence-chunked variant of `/tts` — same request shape, but returns
     audio as Server-Sent Events, one `chunk` per sentence, so a client (or
@@ -343,13 +360,13 @@ async def synthesize_stream(
         dialect_id=dialect_id,
         gender=gender,
         pitch=pitch,
-        age=age,
         whisper=whisper,
         ref_text=ref_text,
         speed=speed,
         quality=quality,
         guidance_scale=guidance_scale,
         ref_audio=ref_audio,
+        ai_dialect_rewrite=ai_dialect_rewrite,
     )
     return StreamingResponse(
         _stream_events(pipeline, tts_request, ref_audio_bytes),

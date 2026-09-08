@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from backend.app.data.dialects import DEFAULT_DIALECT_ID, DIALECT_BY_ID
-from backend.app.data.voice_design import DEFAULT_PITCH, AgeGroup, Gender, Pitch
+from backend.app.data.voice_design import DEFAULT_PITCH, Gender, Pitch
 
 MAX_INPUT_CHARS_HARD_CAP = 2000  # mirrors Settings.max_input_chars default; see config.py
 
@@ -43,8 +43,14 @@ class TTSRequest(BaseModel):
     dialect_id: str = DEFAULT_DIALECT_ID
     gender: Gender | None = None
     pitch: Pitch = DEFAULT_PITCH
-    age: AgeGroup | None = None
     whisper: bool = False
+
+    # Opt-in AI dialect rewrite (services/dialect_rewriter.py) — off by
+    # default. When true, the text is rewritten into `dialect_id`'s wording
+    # and diacritized by OpenAI before synthesis, instead of the user's
+    # literal input. Requires OPENAI_API_KEY server-side; see
+    # /api/model-info's `dialect_rewriter_configured`.
+    ai_dialect_rewrite: bool = False
 
     # clone mode — ref_audio itself travels as an UploadFile at the API
     # layer, not through this model; ref_text does not.
@@ -93,6 +99,13 @@ class PreprocessRequest(BaseModel):
     text: str = Field(..., max_length=MAX_INPUT_CHARS_HARD_CAP)
     dialect_id: str = DEFAULT_DIALECT_ID
     pipeline_mode: PipelineMode = "native"
+    ai_dialect_rewrite: bool = False
+    # Only meaningful alongside ai_dialect_rewrite — see dialect_rewriter.py's
+    # module docstring for the speaker-gender-agreement it applies. `None`
+    # (the live preview's default, matching "auto"/clone mode) means no
+    # gender-agreement instruction is added; the text's own gender wording
+    # is left exactly as typed.
+    gender: Gender | None = None
 
     @field_validator("dialect_id")
     @classmethod
@@ -150,6 +163,11 @@ class ModelInfo(BaseModel):
     pipeline_modes: list[PipelineMode]
     diacritizer_loaded: bool
     english_tts_loaded: bool
+    # No load state to report (nothing loads at startup) — just whether
+    # OPENAI_API_KEY is set, so the frontend can grey out the AI dialect
+    # rewrite toggle with an honest reason instead of only failing at
+    # request time. See services/dialect_rewriter.is_configured().
+    dialect_rewriter_configured: bool
 
 
 class HealthResponse(BaseModel):

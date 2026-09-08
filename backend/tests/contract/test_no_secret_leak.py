@@ -27,3 +27,21 @@ def test_model_info_never_includes_a_token_field():
     resp = client.get("/api/health")
     assert "token" not in resp.text.lower()
     assert "hf_token" not in resp.text.lower()
+
+
+def test_dialect_rewrite_upstream_failure_does_not_leak_key_or_traceback(monkeypatch):
+    from backend.app.services import dialect_rewriter
+    from backend.app.services.dialect_rewriter import DialectRewriteError
+
+    async def fake_rewrite(text, *, dialect_id, enabled, gender=None):
+        raise DialectRewriteError("upstream_error", "AI dialect rewrite failed — try again in a moment")
+
+    monkeypatch.setattr(dialect_rewriter, "maybe_rewrite", fake_rewrite)
+    client = make_client()
+    resp = client.post(
+        "/api/tts",
+        data={"text": "مرحبا", "dialect_id": "saudi", "ai_dialect_rewrite": "true"},
+    )
+    assert "sk-" not in resp.text
+    assert "openai_api_key" not in resp.text.lower()
+    assert "Traceback" not in resp.text

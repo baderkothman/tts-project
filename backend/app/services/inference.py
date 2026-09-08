@@ -169,11 +169,13 @@ class TTSEngine:
             ref_audio = (torch.from_numpy(waveform), sr)
             ref_text = request.ref_text or None
         elif request.mode == "voice_design":
+            # No age tag — see data/voice_design.py's module docstring: a
+            # controlled test against this exact checkpoint found the age
+            # instruct mostly ineffective, so it's never exposed or sent
+            # rather than offering a control that mostly does nothing.
             parts = []
             if request.gender:
                 parts.append(request.gender)
-            if request.age:
-                parts.append(request.age)
             parts.append(request.pitch)
             if request.whisper:
                 parts.append("whisper")

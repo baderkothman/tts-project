@@ -1,15 +1,20 @@
 # لهجتنا — Arabic Dialect Text-to-Speech
 
 Type Arabic text — Modern Standard or one of 13 real dialects, optionally mixed with
-English — pick a voice by attribute (gender, pitch, age) or clone one from a short
+English — pick a voice by attribute (gender, pitch) or clone one from a short
 reference clip, and hear it spoken with automatic diacritization and natural-sounding
-embedded English. Powered **exclusively** by
+embedded English. Speech synthesis itself is powered **exclusively** by
 [`oddadmix/lahgtna-omnivoice-v2`](https://huggingface.co/oddadmix/lahgtna-omnivoice-v2)
-(the [OmniVoice](https://github.com/k2-fsa/OmniVoice) architecture) for Arabic speech, run
-locally through a Python inference service. No Groq, ElevenLabs, Azure, OpenAI, Gemini, or
-any other hosted TTS provider — and no fallback to one. (Kokoro-82M, also local and
+(the [OmniVoice](https://github.com/k2-fsa/OmniVoice) architecture), run locally through a
+Python inference service. No Groq, ElevenLabs, Azure, Gemini, or any other hosted TTS
+provider ever generates audio — and no fallback to one. (Kokoro-82M, also local and
 open-source, is used only as a selectable *alternative* for English words — see
 [Mixed Arabic/English speech](#mixed-arabicenglish-speech) below.)
+
+The one deliberate exception: an **opt-in** "AI dialect rewrite" toggle sends the typed
+text (never audio) to OpenAI to rewrite it into the chosen dialect's wording before
+synthesis — off by default, and the rest of the app works identically without it. See
+[AI dialect rewrite (optional, OpenAI)](#ai-dialect-rewrite-optional-openai) below.
 
 This is the third phase of this repository's Arabic TTS work. The first two phases
 (`specs/001-arabic-tts-prototype/`, `specs/002-saudi-tts-prototype/`) used hosted vendor
@@ -19,12 +24,16 @@ pick, kept as a historical record.
 
 ## Requires credentials?
 
-**No.** Both models download anonymously from Hugging Face Hub on first run (Lahgtna
-~2.4GB, the diacritizer ~1.2GB, cached under `.hf_cache/` after that; Kokoro-82M is much
-smaller). `HF_TOKEN` in `.env.example` is optional — it only raises the Hub's anonymous
-download rate limit, nothing else needs it. One system dependency: `espeak-ng`
-(`brew install espeak-ng` / `apt install espeak-ng`), needed for Kokoro's phonemizer and
-for the English-transliteration fallback — see below.
+**No, for speech synthesis.** Both TTS models download anonymously from Hugging Face Hub
+on first run (Lahgtna ~2.4GB, the diacritizer ~1.2GB, cached under `.hf_cache/` after that;
+Kokoro-82M is much smaller). `HF_TOKEN` in `.env.example` is optional — it only raises the
+Hub's anonymous download rate limit, nothing else needs it. One system dependency:
+`espeak-ng` (`brew install espeak-ng` / `apt install espeak-ng`), needed for Kokoro's
+phonemizer and for the English-transliteration fallback — see below.
+
+**Yes, for the opt-in AI dialect rewrite toggle only** — `OPENAI_API_KEY` in `.env`. Leave
+it unset and the toggle is simply reported unavailable (`/api/model-info`'s
+`dialect_rewriter_configured: false`); every other feature works unchanged.
 
 ## Architecture
 
@@ -56,9 +65,16 @@ This model has **no fixed, named voice roster** — verified by reading the inst
 one of three real, mutually exclusive modes (`OmniVoice.generate()`):
 
 1. **Voice design** — an `instruct` string built from a closed, validated vocabulary:
-   gender (`male`/`female`), age, pitch, and whisper style. Passing anything outside that
+   gender (`male`/`female`), pitch, and whisper style. Passing anything outside that
    vocabulary raises an error inside the package itself — this app's UI only exposes what
-   is actually in that enum.
+   is actually in that enum. The package's vocabulary also has an `age` category
+   ("child"/"teenager"/"young adult"/"middle-aged"/"elderly") that this app deliberately
+   does *not* expose: a controlled test against this exact fine-tuned checkpoint (5 real
+   generations per category, F0 measured directly, ANOVA + pairwise t-tests) found the 3
+   middle categories statistically indistinguishable from each other (p=0.36-0.56) — see
+   `backend/app/data/voice_design.py`'s module docstring for the full numbers. Rather than
+   ship a control that mostly does nothing, no age instruct is ever sent; every voice_design
+   request gets the checkpoint's own untagged default.
 2. **Voice cloning** — a 3–10s reference audio clip (+ optional transcript, auto-transcribed
    via Whisper if omitted).
 3. **Auto** — the model picks a voice with no guidance.
@@ -66,7 +82,7 @@ one of three real, mutually exclusive modes (`OmniVoice.generate()`):
 **Dialect is a separate parameter** (`language`), not part of the voice-design instruct
 string (an earlier assumption during this project that dialect would be an instruct
 keyword was wrong — verified by reading the package's own instruct validator, which
-rejects anything not in that gender/age/pitch/whisper/accent list). `backend/app/data/dialects.py`
+rejects anything not in that gender/pitch/whisper/accent/age list). `backend/app/data/dialects.py`
 maps each of the 13 dialects `oddadmix/lahgtna-omnivoice-v2`'s own model card marks
 **completed** (not the six it marks merely *planned* — those are never exposed) to the
 real ISO-ish language code the installed package's language resolver accepts. Two honest
@@ -79,7 +95,7 @@ gaps, not papered over:
   own "completed" list. Selecting it falls back to language-agnostic mode with a warning
   surfaced in the UI, rather than silently pretending it's conditioned like the other 12.
 
-`GET /api/voices` reflects this honestly too — it returns the real gender/pitch/age
+`GET /api/voices` reflects this honestly too — it returns the real gender/pitch
 options, not a fabricated list of named speakers.
 
 ## Automatic diacritization (تشكيل)
@@ -98,6 +114,55 @@ this, not caution for its own sake:
   sentences: the model otherwise appends full MSA case endings dialectal speech doesn't
   use — e.g. colloquial "روح" ("go") came back "رُوحٍ", a genitive-case noun reading
   ("spirit/soul"). Full before/after examples in `docs/DIACRITIZATION_EVALUATION.md`.
+
+## AI dialect rewrite (optional, OpenAI)
+
+Everything above only *conditions pronunciation* — it never changes the words the user
+typed. There is no local model in this app that rewrites an MSA-ish sentence into another
+dialect's actual vocabulary/phrasing; the user has always had to type dialectal Arabic
+themselves for that to come through.
+
+An opt-in checkbox (off by default, next to the dialect picker) fills that gap: when
+enabled, `services/dialect_rewriter.py` sends the typed text and chosen dialect to OpenAI
+(`gpt-5-mini` by default, `OPENAI_MODEL` overridable, `reasoning: "low"` — see the module
+docstring for why "minimal" was tried and rejected: faster but measurably unreliable, real
+garbled/doubled output sampled directly against the live API) and gets back the sentence
+rewritten in that dialect's real wording, fully diacritized for how it's actually spoken (no
+MSA case endings on dialectal words — the same rule the local diacritizer enforces, carried
+into the prompt instead). That output is then used as-is; the local Fine-Tashkeel diacritizer
+already refuses to re-diacritize text that already carries diacritics (see above), so no
+special-case bypass was needed to satisfy "use the AI output as-is."
+
+The same call also fixes **speaker-gender agreement** when a voice gender is chosen
+(`voice_design` mode, male/female — not "auto" or `clone`, which have no gender to agree
+with): Arabic predicate adjectives and participles that describe the *speaker referring to
+themselves* ("أنا سعيد" vs "أنا سعيدة") are conjugated to match the chosen voice, regardless
+of which form the user actually typed. This is scoped narrowly on purpose — a second-person
+addressee or a third person the sentence talks about keeps whatever gender the text already
+gives them; only self-reference follows the voice. (Real rule-based Arabic morphology for
+this is genuinely hard to get right — the same reasoning that put dialect rewriting itself
+behind a model instead of a dictionary.)
+
+- **Opt-in, never automatic** — no request is silently rewritten, no surprise OpenAI cost.
+- **Disclosed, not hidden** — the toggle's own hint text says the text will be sent to
+  OpenAI; the footer names this as the one exception to the local-only claim above.
+- **Fails loudly, not silently** — if `OPENAI_API_KEY` is missing or the call fails while
+  the toggle is on, `/api/tts` returns an error (503/502) instead of quietly falling back
+  to unrewritten text the user didn't ask for.
+- **Validated directly against the live API while building this**, not just mocked: both the
+  dialect rewrite and the gender-agreement scoping (self vs. addressee vs. third person, across
+  MSA/Saudi/Egyptian, both voice genders) were sampled against the real endpoint — see git
+  history for the specific cases. Broader native-speaker dialect-authenticity evaluation the
+  way diacritization got (`docs/DIACRITIZATION_EVALUATION.md`) hasn't been done.
+- **The "ready to speak" preview and the actual generation are two independent calls** — the
+  live preview (`POST /api/preprocess`, debounced as you type) and `POST /api/tts` each make
+  their own OpenAI call when this is on, and the model isn't deterministic: two calls with
+  identical input can come back worded differently (though both are valid rewrites). Real
+  reproduced consequence: the preview panel could show one wording while the audio spoke
+  another. Fixed by making the preview panel authoritative for whatever was actually
+  generated — `App.tsx`'s `handleGenerate` overwrites it with the real response's
+  `processed_text`/`segments` the moment audio is ready, so the panel always matches the
+  audio currently loaded; the next edit's live preview naturally takes back over.
 
 ## Mixed Arabic/English speech
 
@@ -130,13 +195,14 @@ is simply spoken as Arabic from then on.
 ```text
 GET  /api/health        status, whether Lahgtna finished loading, device
 GET  /api/model-info    repo id, architecture, device, sample rate, capabilities, pipeline modes,
-                         diacritizer/English-TTS load status
+                         diacritizer/English-TTS load status, dialect_rewriter_configured
 GET  /api/dialects      the 13 real dialects + MSA
-GET  /api/voices        gender/pitch/age options (no named-voice roster — see above)
-POST /api/preprocess    JSON: text + dialect_id + pipeline_mode -> processed text + per-segment
-                         breakdown, no audio generated (the UI's live preview)
+GET  /api/voices        gender/pitch options (no named-voice roster — see above)
+POST /api/preprocess    JSON: text + dialect_id + pipeline_mode + ai_dialect_rewrite -> processed
+                         text + per-segment breakdown, no audio generated (the UI's live preview)
 POST /api/tts           multipart/form-data: text + mode + pipeline_mode + dialect/voice options
-                         [+ ref_audio file] -> audio + the same processed-text/segments breakdown
+                         + ai_dialect_rewrite [+ ref_audio file] -> audio + the same
+                         processed-text/segments breakdown
 POST /api/tts/stream    same request shape as /api/tts -> Server-Sent Events, one `chunk` per
                          sentence as its audio is ready, then a `done` event with real measured
                          time-to-first-audio (`ttfa_ms`) — see "Streaming and latency" below
@@ -183,7 +249,8 @@ web app" reasoning in more depth.
 brew install espeak-ng   # or: apt install espeak-ng — needed by Kokoro + the transliteration fallback
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -e ".[dev]"
-cp .env.example .env   # optional — no credentials required
+cp .env.example .env   # optional — no credentials required, except OPENAI_API_KEY for the
+                        # opt-in AI dialect rewrite toggle (see above)
 
 npm install   # root install — sets up both frontend/ and backend/ as npm workspaces (see below)
 ```
@@ -211,7 +278,7 @@ FastAPI process at `/`, and `npm run dev` is then unnecessary.
 ## Tests
 
 ```bash
-.venv/bin/pytest backend/tests -v -m "not integration"   # offline, no model weights: 101 pass
+.venv/bin/pytest backend/tests -v -m "not integration"   # offline, no model weights: 117 pass
 RUN_MODEL_INTEGRATION_TESTS=1 .venv/bin/pytest backend/tests/integration -v -m integration
                                                             # real weights, real MPS inference: 6 pass
 
@@ -269,6 +336,7 @@ backend/app/
 │   ├── inference.py          # TTSEngine — the one OmniVoice (Arabic) instance, loaded once
 │   ├── english_tts.py         # Kokoro-82M wrapper, for dual_model mode
 │   ├── diacritizer.py         # Fine-Tashkeel wrapper — see docs/DIACRITIZATION_EVALUATION.md
+│   ├── dialect_rewriter.py    # opt-in OpenAI dialect rewrite — see "AI dialect rewrite" above
 │   ├── language_segmenter.py  # pure Unicode-script Arabic/English segmentation, no model
 │   ├── transliterator.py      # espeak-ng-driven phonetic EN->Arabic-script fallback
 │   ├── pronunciation_dictionary.py  # JSON-backed term overrides, applied before segmentation

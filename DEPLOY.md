@@ -75,8 +75,12 @@ apply to a typical Railway deploy:
    Variables). None are required — the model downloads anonymously — but
    these are worth setting:
    - `HF_TOKEN` — optional; raises Hugging Face Hub's anonymous download
-     rate limit for the first boot's ~3.6GB pull. Not needed for anything
-     else (`.env.example`'s comment: "This app needs NO API key").
+     rate limit for the first boot's ~3.6GB pull. Not needed for TTS
+     synthesis itself.
+   - `OPENAI_API_KEY` — optional; only enables the opt-in "AI dialect
+     rewrite" toggle (`services/dialect_rewriter.py`, see README). Leave it
+     unset and that toggle is reported unavailable; everything else on this
+     deploy works identically without it.
    - `HF_HUB_DISABLE_XET=1` — see "A disk-space bug" below. Xet-based
      downloads need roughly 2x a file's size in transient staging space
      during "reconstruction"; on a tightly-sized volume that's the

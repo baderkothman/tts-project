@@ -4,7 +4,6 @@
 
 export type Gender = "male" | "female";
 export type Pitch = "very low pitch" | "low pitch" | "moderate pitch" | "high pitch" | "very high pitch";
-export type AgeGroup = "child" | "teenager" | "young adult" | "middle-aged" | "elderly";
 export type Quality = "fast" | "high";
 export type Mode = "voice_design" | "clone" | "auto";
 export type PipelineMode = "native" | "dual_model" | "transliteration";
@@ -23,7 +22,6 @@ export interface VoiceOptions {
   supports_voice_cloning: boolean;
   gender_options: Gender[];
   pitch_options: Pitch[];
-  age_options: AgeGroup[];
   note: string;
 }
 
@@ -48,6 +46,7 @@ export interface ModelInfo {
   pipeline_modes: PipelineMode[];
   diacritizer_loaded: boolean;
   english_tts_loaded: boolean;
+  dialect_rewriter_configured: boolean;
 }
 
 export interface SegmentInfo {
@@ -98,11 +97,11 @@ export interface TTSRequestParams {
   dialect_id: string;
   gender: Gender | null;
   pitch: Pitch;
-  age: AgeGroup | null;
   whisper: boolean;
   ref_text: string | null;
   speed: number;
   quality: Quality;
   guidance_scale: number;
   ref_audio: File | null;
+  ai_dialect_rewrite: boolean;
 }

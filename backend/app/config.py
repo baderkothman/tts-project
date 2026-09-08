@@ -1,9 +1,11 @@
 """Application settings.
 
-Env-only — no secret or path is ever hardcoded. This app has exactly one
-model, loaded from Hugging Face Hub (`oddadmix/lahgtna-omnivoice-v2`); there
-is no provider credential to manage at all, unlike the prior Groq-based
-phase.
+Env-only — no secret or path is ever hardcoded. TTS synthesis itself needs
+exactly one model, loaded from Hugging Face Hub
+(`oddadmix/lahgtna-omnivoice-v2`), with no provider credential to manage —
+unlike the prior Groq-based phase. The one exception is `openai_api_key`
+below: an *optional* credential for the opt-in AI dialect rewrite step
+(services/dialect_rewriter.py), which never touches audio generation.
 """
 
 from __future__ import annotations
@@ -55,6 +57,21 @@ class Settings(BaseSettings):
 
     request_timeout_s: float = 120.0
     max_input_chars: int = 2000
+
+    # Optional AI dialect rewrite step (services/dialect_rewriter.py) — an
+    # opt-in, per-request feature, not a core dependency of this app the
+    # way the TTS model is. `None` means the feature is simply unavailable
+    # (reported honestly via /api/model-info's dialect_rewriter_configured)
+    # rather than raising at startup.
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-5-mini"
+    # 30s, not the more typical-looking 10-15s: measured directly against
+    # the real API — gpt-5-mini at "low" reasoning effort (the setting
+    # dialect_rewriter.py actually uses, chosen for reliability over the
+    # faster-but-flakier "minimal") ran up to ~12s on this task, so 30s
+    # leaves real headroom instead of timing out a non-trivial fraction of
+    # otherwise-fine requests.
+    openai_timeout_s: float = 30.0
 
     # Reference-audio upload limits (voice cloning mode).
     max_reference_audio_bytes: int = 15 * 1024 * 1024  # 15 MB

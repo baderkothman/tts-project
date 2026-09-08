@@ -1,4 +1,4 @@
-import type { AgeGroup, Gender, Mode, Pitch } from "../types/api";
+import type { Gender, Mode, Pitch } from "../types/api";
 import { PITCH_OPTIONS } from "../constants";
 import { ReferenceAudioUpload } from "./ReferenceAudioUpload";
 
@@ -9,8 +9,6 @@ interface VoicePanelProps {
   onGenderChange: (g: Gender | null) => void;
   pitch: Pitch;
   onPitchChange: (p: Pitch) => void;
-  age: AgeGroup | null;
-  onAgeChange: (a: AgeGroup | null) => void;
   whisper: boolean;
   onWhisperChange: (w: boolean) => void;
   refAudio: File | null;
@@ -18,14 +16,6 @@ interface VoicePanelProps {
   refText: string;
   onRefTextChange: (t: string) => void;
 }
-
-const AGE_LABELS: Record<AgeGroup, string> = {
-  child: "طفل",
-  teenager: "مراهق",
-  "young adult": "شاب",
-  "middle-aged": "متوسط العمر",
-  elderly: "مسن",
-};
 
 const PITCH_LABELS: Record<Pitch, string> = {
   "very low pitch": "منخفضة جدًا",
@@ -110,21 +100,6 @@ export function VoicePanel(props: VoicePanelProps) {
 
           <details className="disclosure">
             <summary>خيارات إضافية</summary>
-            <div className="voice-design__row">
-              <span className="voice-design__label">الفئة العمرية</span>
-              <select
-                className="select"
-                value={props.age ?? ""}
-                onChange={(e) => props.onAgeChange((e.target.value || null) as AgeGroup | null)}
-              >
-                <option value="">بدون تفضيل</option>
-                {(Object.keys(AGE_LABELS) as AgeGroup[]).map((a) => (
-                  <option key={a} value={a}>
-                    {AGE_LABELS[a]}
-                  </option>
-                ))}
-              </select>
-            </div>
             <label className="checkbox-row">
               <input
                 type="checkbox"

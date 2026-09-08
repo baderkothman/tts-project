@@ -23,6 +23,10 @@ dependencies = [
     "kokoro>=0.9.2",
     "phonemizer-fork>=3.3",
     "pyloudnorm>=0.2",
+    # Optional AI dialect rewrite step (services/dialect_rewriter.py) — only
+    # exercised when OPENAI_API_KEY is set and a request opts in; the rest
+    # of the app has no dependency on it.
+    "openai>=2.0",
 ]
 
 [project.optional-dependencies]
