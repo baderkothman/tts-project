@@ -61,6 +61,7 @@ _TRAILING_VOWEL_RE = re.compile("[ًٌٍَُِ]+$")
 _lock = threading.Lock()
 _model = None
 _tokenizer = None
+_load_error: str | None = None
 
 
 def has_diacritics(text: str) -> bool:
@@ -76,20 +77,36 @@ def load() -> None:
 
 
 def _load() -> None:
-    global _model, _tokenizer
+    global _model, _tokenizer, _load_error
     with _lock:
         if _model is not None:
             return
+        if _load_error is not None:
+            # Already tried and failed once (e.g. disk full, network down) —
+            # real production case: retrying the same failing multi-hundred-MB
+            # download on every single /api/tts request (diacritize() lazy-
+            # loads too) turned one bad deploy into every request paying a
+            # slow, doomed retry. Fail fast instead.
+            raise RuntimeError(_load_error)
         from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
         logger.info("Loading diacritizer %s (this runs once)", _MODEL_NAME)
-        _tokenizer = AutoTokenizer.from_pretrained(_MODEL_NAME)
-        _model = AutoModelForSeq2SeqLM.from_pretrained(_MODEL_NAME)
-        _model.eval()
+        try:
+            _tokenizer = AutoTokenizer.from_pretrained(_MODEL_NAME)
+            _model = AutoModelForSeq2SeqLM.from_pretrained(_MODEL_NAME)
+            _model.eval()
+        except Exception as exc:  # noqa: BLE001
+            _load_error = str(exc)
+            logger.exception("Diacritizer failed to load")
+            raise
 
 
 def is_loaded() -> bool:
     return _model is not None
+
+
+def load_error() -> str | None:
+    return _load_error
 
 
 def _strip_word_final_irab(text: str) -> str:
@@ -171,7 +188,18 @@ def _diacritize_line(text: str, dialect_id: str) -> tuple[str, bool]:
     trailing_ws = text[len(text.rstrip()) :]
     core = text.strip()
 
-    result = _run_model(core)
+    try:
+        result = _run_model(core)
+    except Exception:  # noqa: BLE001
+        # main.py's startup lifespan already promises a failed diacritizer
+        # "degrades gracefully (diacritization is skipped)" instead of
+        # blocking the app — real reproduced bug: that promise only held at
+        # startup. A request-time retry (this call, via `_load()` inside
+        # `_run_model`) propagated the load failure straight into a 500 for
+        # every /api/tts call instead. `_load()`'s own logger.exception
+        # already recorded the real cause; degrade here too, once per call,
+        # rather than failing the whole request over a non-essential step.
+        return text, False
     if dialect_id != "msa":
         result = _strip_word_final_irab(result)
     result = leading_ws + result + trailing_ws

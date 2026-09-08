@@ -4,6 +4,9 @@ that); `_run_model` is monkeypatched so these stay fast and offline."""
 
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 
 from backend.app.services import diacritizer
@@ -110,3 +113,65 @@ def test_max_new_tokens_scales_with_input_and_has_a_floor():
     assert diacritizer._max_new_tokens(10) == 512  # floor for short input
     assert diacritizer._max_new_tokens(1000) == 2048  # capped, not 3000
     assert diacritizer._max_new_tokens(200) == 600  # scales for mid-length input
+
+
+def test_diacritize_degrades_gracefully_when_model_unavailable(monkeypatch):
+    # Real reproduced bug (Railway deploy, disk-full diacritizer load):
+    # main.py's startup promises a failed diacritizer "degrades gracefully"
+    # instead of blocking the app, but a request-time retry propagated the
+    # load failure straight into a 500 for every /api/tts call. Text must
+    # come back unchanged, not raise.
+    def boom(text: str) -> str:
+        raise RuntimeError("Diacritizer failed to load")
+
+    monkeypatch.setattr(diacritizer, "_run_model", boom)
+    result, applied = diacritizer.diacritize("مرحبا", dialect_id="msa")
+    assert applied is False
+    assert result == "مرحبا"
+
+
+def test_diacritize_degrades_gracefully_across_multiple_lines(monkeypatch):
+    def boom(text: str) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(diacritizer, "_run_model", boom)
+    result, applied = diacritizer.diacritize("مرحبا\nكيفك", dialect_id="msa")
+    assert applied is False
+    assert result == "مرحبا\nكيفك"
+
+
+def test_load_records_error_and_fails_fast_on_retry(monkeypatch):
+    """`_load()` must not re-attempt an already-failed (expensive, doomed)
+    download on every call — real production case: with no fail-fast check,
+    every single /api/tts request retried the same disk-full download."""
+    monkeypatch.setattr(diacritizer, "_model", None)
+    monkeypatch.setattr(diacritizer, "_tokenizer", None)
+    monkeypatch.setattr(diacritizer, "_load_error", None)
+
+    calls = {"count": 0}
+
+    class _FakeAutoTokenizer:
+        @staticmethod
+        def from_pretrained(_name):
+            calls["count"] += 1
+            raise OSError("No space left on device")
+
+    class _FakeAutoModel:
+        @staticmethod
+        def from_pretrained(_name):
+            raise AssertionError("should not be reached — tokenizer fails first")
+
+    fake_transformers = types.SimpleNamespace(
+        AutoModelForSeq2SeqLM=_FakeAutoModel, AutoTokenizer=_FakeAutoTokenizer
+    )
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+    with pytest.raises(OSError, match="No space left on device"):
+        diacritizer._load()
+    assert diacritizer.load_error() == "No space left on device"
+    assert calls["count"] == 1
+
+    # Second call: must fail fast with the cached error, not retry.
+    with pytest.raises(RuntimeError, match="No space left on device"):
+        diacritizer._load()
+    assert calls["count"] == 1

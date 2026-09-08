@@ -167,6 +167,16 @@ This is still per-sentence *batch* generation, not true token-level streaming �
 token stream (rather than a complete pre-written string) would look like, and what would
 have to change.
 
+## Deploying
+
+`Dockerfile` + `railway.json` at the repo root — see `DEPLOY.md` for the full
+Railway setup (a persistent Volume for the model cache, why CPU-only `torch`
+matters, and what was actually verified locally before this was written).
+Not Vercel: this backend keeps a ~3.6GB model warm in memory on a long-lived
+process, which is a different shape than Vercel's stateless Functions
+support — `docs/PRODUCTION_ARCHITECTURE.md` covers the same "not a typical
+web app" reasoning in more depth.
+
 ## Setup
 
 ```bash
