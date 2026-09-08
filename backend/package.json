@@ -1,0 +1,10 @@
+{
+  "name": "backend",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Task-runner shim only — the real package is Python (see ../pyproject.toml). Exists so Turborepo can orchestrate the backend's dev server and test suite alongside frontend/ from one root command.",
+  "scripts": {
+    "dev": "cd .. && .venv/bin/uvicorn backend.app.main:app --reload --port 8000",
+    "test": "cd .. && .venv/bin/pytest backend/tests -m \"not integration\""
+  }
+}

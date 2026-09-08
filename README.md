@@ -175,21 +175,27 @@ uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -e ".[dev]"
 cp .env.example .env   # optional — no credentials required
 
-cd frontend && npm install
+npm install   # root install — sets up both frontend/ and backend/ as npm workspaces (see below)
 ```
 
 ## Run
 
-```bash
-# Backend (loads the model once at startup — first run downloads ~2.4GB)
-.venv/bin/uvicorn backend.app.main:app --reload --port 8000
+This is a [Turborepo](https://turborepo.com) — a root `package.json` with `frontend/` and
+`backend/` as npm workspaces, orchestrated by `turbo.json`. `backend/package.json` is a thin
+task-runner shim only (the real backend is Python; it has no build step and no JS code) —
+it exists purely so `turbo run dev`/`test` can start/run it alongside the frontend from one
+root command instead of two separate terminals.
 
-# Frontend dev server (proxies /api to :8000, see frontend/vite.config.ts)
-cd frontend && npm run dev
+```bash
+npm run dev     # starts both: backend on :8000 (loads the model, first run downloads ~2.4GB)
+                 #              and frontend on :5173 (proxies /api to :8000)
 ```
 
-Open <http://localhost:5173>. For a single-process deployment, `npm run build` in
-`frontend/` first — `backend/app/main.py` serves `frontend/dist/` directly from the same
+Open <http://localhost:5173>. Prefer separate terminals, or want just one side? Run either
+piece directly — `.venv/bin/uvicorn backend.app.main:app --reload --port 8000`, or
+`cd frontend && npm run dev` — exactly as before; `npm run dev` at the root is a convenience,
+not a requirement. For a single-process deployment, `npm run build` (root, or `cd frontend &&
+npm run build`) first — `backend/app/main.py` serves `frontend/dist/` directly from the same
 FastAPI process at `/`, and `npm run dev` is then unnecessary.
 
 ## Tests
@@ -198,6 +204,10 @@ FastAPI process at `/`, and `npm run dev` is then unnecessary.
 .venv/bin/pytest backend/tests -v -m "not integration"   # offline, no model weights: 101 pass
 RUN_MODEL_INTEGRATION_TESTS=1 .venv/bin/pytest backend/tests/integration -v -m integration
                                                             # real weights, real MPS inference: 6 pass
+
+npm run test    # root — same offline suite via turbo, cached on unchanged inputs (turbo run test)
+npm run build   # root — frontend's tsc+vite build; backend has no build step, turbo skips it
+npm run lint    # root — frontend's oxlint; backend has no linter configured, turbo skips it
 ```
 
 The integration runs were executed during this phase's own development: Lahgtna load
@@ -240,6 +250,8 @@ model download) and skips itself if the system library isn't installed.
 ## Project layout
 
 ```text
+package.json / turbo.json   # root Turborepo config — see "Run" above
+backend/package.json        # task-runner shim only (dev/test) — no build/lint script, no JS code
 backend/app/
 ├── api/tts.py               # /api/health, /api/model-info, /api/dialects, /api/voices,
 │                             # /api/preprocess, /api/tts
