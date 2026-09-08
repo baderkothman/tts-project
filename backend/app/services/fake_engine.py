@@ -45,11 +45,12 @@ class FakeEngine:
         if request.mode == "clone" and not ref_audio_bytes:
             raise InferenceError("invalid_input", "Voice cloning mode requires a reference audio file")
 
-        dialect = DIALECT_BY_ID[request.dialect_id]
-        warnings = []
-        if dialect.written_only:
-            warnings.append(f"'{dialect.name_en}' relies on the dialectal Arabic you typed.")
+        # No written-only-dialect warning here — that's text_preprocessor's
+        # job (see inference.py's TTSEngine for the same note), and every
+        # caller in this test suite goes through SpeechPipeline, which
+        # always runs preprocessing first.
+        DIALECT_BY_ID[request.dialect_id]  # still validate the id like the real engine would
 
         # 0.5s of silence — enough for duration/latency math to exercise real code.
         samples = np.zeros(12000, dtype=np.float32)
-        return GenerationResult(samples=samples, sample_rate=24000, warnings=warnings)
+        return GenerationResult(samples=samples, sample_rate=24000, warnings=[])

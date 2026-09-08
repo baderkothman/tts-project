@@ -25,10 +25,19 @@ Quality = Literal["fast", "high"]
 
 Mode = Literal["voice_design", "clone", "auto"]
 
+# How mixed Arabic/English text gets spoken — see services/speech_pipeline.py
+# and docs/ENGLISH_TTS_EVALUATION.md for the measured reasoning behind
+# "native" (Lahgtna alone) being the default rather than "dual_model".
+#   native:          one Lahgtna call; English words spoken as Lahgtna itself renders them.
+#   dual_model:      Arabic segments -> Lahgtna, English segments -> Kokoro, then stitched.
+#   transliteration: English segments rewritten to Arabic-script phonetics first, then one Lahgtna call.
+PipelineMode = Literal["native", "dual_model", "transliteration"]
+
 
 class TTSRequest(BaseModel):
     text: str = Field(..., max_length=MAX_INPUT_CHARS_HARD_CAP)
     mode: Mode = "voice_design"
+    pipeline_mode: PipelineMode = "native"
 
     # voice_design mode
     dialect_id: str = DEFAULT_DIALECT_ID
@@ -69,14 +78,51 @@ class LatencyInfo(BaseModel):
     real_time_factor: float
 
 
+class SegmentInfo(BaseModel):
+    """One Arabic or English run of the input — mirrors
+    `services.text_preprocessor.SegmentPreview` as a wire-serializable
+    shape, for the "what will actually be spoken" UI preview."""
+
+    language: Literal["ar", "en"]
+    original_text: str
+    speak_text: str
+    diacritized: bool = False
+
+
+class PreprocessRequest(BaseModel):
+    text: str = Field(..., max_length=MAX_INPUT_CHARS_HARD_CAP)
+    dialect_id: str = DEFAULT_DIALECT_ID
+    pipeline_mode: PipelineMode = "native"
+
+    @field_validator("dialect_id")
+    @classmethod
+    def dialect_known(cls, v: str) -> str:
+        if v not in DIALECT_BY_ID:
+            raise ValueError(f"unknown dialect_id '{v}'; valid options: {sorted(DIALECT_BY_ID)}")
+        return v
+
+
+class PreprocessResponse(BaseModel):
+    original_text: str
+    processed_text: str
+    segments: list[SegmentInfo]
+    warnings: list[str] = Field(default_factory=list)
+
+
 class TTSResponse(BaseModel):
     audio_base64: str
     content_type: str = "audio/wav"
     sample_rate: int
     mode: Mode
+    pipeline_mode: PipelineMode
     dialect_id: str | None
     gender: Gender | None
     latency: LatencyInfo
+    # The pronunciation-ready text and per-segment breakdown actually used
+    # for this generation — the same shape /api/preprocess returns, so the
+    # UI can show one "what will be spoken" panel from either call.
+    processed_text: str
+    segments: list[SegmentInfo]
     # Honest, non-fatal notices surfaced to the UI — e.g. a dialect that
     # falls back to language-agnostic mode (see data/dialects.py). Empty in
     # the common case.
@@ -89,6 +135,8 @@ class ModelCapabilities(BaseModel):
     dialect_control: bool
     diacritics_aware: bool
     named_voice_roster: bool  # always False — see data/README note in api/tts.py
+    automatic_diacritization: bool
+    mixed_language_support: bool
 
 
 class ModelInfo(BaseModel):
@@ -99,6 +147,9 @@ class ModelInfo(BaseModel):
     sample_rate: int
     dialects_supported: int
     capabilities: ModelCapabilities
+    pipeline_modes: list[PipelineMode]
+    diacritizer_loaded: bool
+    english_tts_loaded: bool
 
 
 class HealthResponse(BaseModel):

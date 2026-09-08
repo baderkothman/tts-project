@@ -143,15 +143,13 @@ class TTSEngine:
         import torch
         from omnivoice import OmniVoiceGenerationConfig
 
+        # The written-only-dialect warning is surfaced once, by
+        # text_preprocessor.preprocess() (services/speech_pipeline.py always
+        # calls it before reaching here) — not duplicated at this layer.
         warnings: list[str] = []
 
         dialect = DIALECT_BY_ID[request.dialect_id]
         language = dialect.language_code
-        if dialect.written_only:
-            warnings.append(
-                f"'{dialect.name_en}' has no distinct model parameter in this build; "
-                "relying on the dialectal Arabic you typed rather than a language code."
-            )
 
         instruct = None
         ref_audio = None

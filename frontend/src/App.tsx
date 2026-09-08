@@ -5,10 +5,25 @@ import { DialectRail } from "./components/DialectRail";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { GenerationControls } from "./components/GenerationControls";
 import { Header } from "./components/Header";
+import { PreprocessPreview } from "./components/PreprocessPreview";
+import { StreamingDemo } from "./components/StreamingDemo";
 import { TextComposer } from "./components/TextComposer";
 import { VoicePanel } from "./components/VoicePanel";
+import { usePreprocessPreview } from "./hooks/usePreprocessPreview";
+import { useStreamingSynthesis } from "./hooks/useStreamingSynthesis";
 import "./app.css";
-import type { AgeGroup, Dialect, Gender, HealthResponse, Mode, Pitch, Quality, TTSResponse } from "./types/api";
+import type {
+  AgeGroup,
+  Dialect,
+  Gender,
+  HealthResponse,
+  Mode,
+  PipelineMode,
+  Pitch,
+  Quality,
+  TTSRequestParams,
+  TTSResponse,
+} from "./types/api";
 
 const DEFAULT_DIALECT_ID = "msa";
 
@@ -46,6 +61,11 @@ export default function App() {
   const [refText, setRefText] = useState("");
   const [speed, setSpeed] = useState(1);
   const [quality, setQuality] = useState<Quality>("high");
+  // No longer user-adjustable (English-pronunciation handling was removed
+  // from the settings UI) — the backend still needs a pipeline mode, so
+  // "native" (let the Arabic model speak embedded English words itself) is
+  // used unconditionally.
+  const pipelineMode: PipelineMode = "native";
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +106,27 @@ export default function App() {
   const selectedDialect = useMemo(() => dialects.find((d) => d.id === dialectId) ?? null, [dialects, dialectId]);
 
   const modelReady = health?.status === "ok";
+  const { preview, loading: previewLoading } = usePreprocessPreview(text, dialectId, pipelineMode);
+  const { state: streamState, start: startStream, stop: stopStream } = useStreamingSynthesis();
+
+  const buildTtsParams = useCallback(
+    (): TTSRequestParams => ({
+      text,
+      mode,
+      pipeline_mode: pipelineMode,
+      dialect_id: dialectId,
+      gender: mode === "voice_design" ? gender : null,
+      pitch,
+      age: mode === "voice_design" ? age : null,
+      whisper: mode === "voice_design" ? whisper : false,
+      ref_text: mode === "clone" ? refText || null : null,
+      speed,
+      quality,
+      guidance_scale: 2.0,
+      ref_audio: mode === "clone" ? refAudio : null,
+    }),
+    [text, mode, pipelineMode, dialectId, gender, pitch, age, whisper, refText, speed, quality, refAudio],
+  );
 
   const handleGenerate = useCallback(async () => {
     if (!text.trim()) {
@@ -99,20 +140,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const response = await synthesizeSpeech({
-        text,
-        mode,
-        dialect_id: dialectId,
-        gender: mode === "voice_design" ? gender : null,
-        pitch,
-        age: mode === "voice_design" ? age : null,
-        whisper: mode === "voice_design" ? whisper : false,
-        ref_text: mode === "clone" ? refText || null : null,
-        speed,
-        quality,
-        guidance_scale: 2.0,
-        ref_audio: mode === "clone" ? refAudio : null,
-      });
+      const response = await synthesizeSpeech(buildTtsParams());
 
       const buffer = base64ToArrayBuffer(response.audio_base64);
       const blob = new Blob([buffer], { type: response.content_type });
@@ -133,7 +161,24 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [text, mode, dialectId, gender, pitch, age, whisper, refText, speed, quality, refAudio]);
+  }, [text, mode, refAudio, buildTtsParams]);
+
+  const handleStreamToggle = useCallback(() => {
+    if (streamState.active) {
+      stopStream();
+      return;
+    }
+    if (!text.trim()) {
+      setError("اكتب نصًا أولًا");
+      return;
+    }
+    if (mode === "clone" && !refAudio) {
+      setError("استنساخ الصوت يتطلب رفع عيّنة صوتية أولًا");
+      return;
+    }
+    setError(null);
+    void startStream(buildTtsParams());
+  }, [streamState.active, stopStream, text, mode, refAudio, buildTtsParams, startStream]);
 
   function handleReset() {
     setText("");
@@ -153,64 +198,79 @@ export default function App() {
         <Header health={health} />
 
         <main className="composer-card">
-          <TextComposer value={text} onChange={setText} />
+          {/* DOM order = visual order in this RTL layout: نص (right) -> صوت (middle) -> إعدادات (left) */}
+          <section className="composer-col composer-col--text">
+            <TextComposer value={text} onChange={setText} />
+            <PreprocessPreview preview={preview} loading={previewLoading} />
+          </section>
 
-          <DialectRail
-            dialects={dialects.length ? dialects : FALLBACK_DIALECTS}
-            selectedId={dialectId}
-            onSelect={setDialectId}
-          />
+          <section className="composer-col composer-col--audio">
+            {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
-          <VoicePanel
-            mode={mode}
-            onModeChange={setMode}
-            gender={gender}
-            onGenderChange={setGender}
-            pitch={pitch}
-            onPitchChange={setPitch}
-            age={age}
-            onAgeChange={setAge}
-            whisper={whisper}
-            onWhisperChange={setWhisper}
-            refAudio={refAudio}
-            onRefAudioChange={setRefAudio}
-            refText={refText}
-            onRefTextChange={setRefText}
-          />
+            <div className="actions">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={handleGenerate}
+                disabled={loading || !modelReady || !text.trim()}
+              >
+                {loading ? (
+                  <>
+                    <LoadingBars /> جارٍ التوليد…
+                  </>
+                ) : (
+                  "ولّد الصوت"
+                )}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={handleReset} disabled={loading}>
+                مسح
+              </button>
+            </div>
 
-          <GenerationControls speed={speed} onSpeedChange={setSpeed} quality={quality} onQualityChange={setQuality} />
+            <StreamingDemo state={streamState} onToggle={handleStreamToggle} disabled={loading || !modelReady} />
 
-          {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
+            {result && audioUrl && audioBuffer && (
+              <AudioPlayer
+                result={result}
+                audioUrl={audioUrl}
+                arrayBuffer={audioBuffer}
+                dialect={selectedDialect}
+                fileNameHint={`lahgtna-${dialectId}`}
+              />
+            )}
+          </section>
 
-          <div className="actions">
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={handleGenerate}
-              disabled={loading || !modelReady || !text.trim()}
-            >
-              {loading ? (
-                <>
-                  <LoadingBars /> جارٍ التوليد…
-                </>
-              ) : (
-                "ولّد الصوت"
-              )}
-            </button>
-            <button type="button" className="btn btn--ghost" onClick={handleReset} disabled={loading}>
-              مسح
-            </button>
-          </div>
-
-          {result && audioUrl && audioBuffer && (
-            <AudioPlayer
-              result={result}
-              audioUrl={audioUrl}
-              arrayBuffer={audioBuffer}
-              dialect={selectedDialect}
-              fileNameHint={`lahgtna-${dialectId}`}
+          <section className="composer-col composer-col--settings">
+            <DialectRail
+              dialects={dialects.length ? dialects : FALLBACK_DIALECTS}
+              selectedId={dialectId}
+              onSelect={setDialectId}
             />
-          )}
+
+            <VoicePanel
+              mode={mode}
+              onModeChange={setMode}
+              gender={gender}
+              onGenderChange={setGender}
+              pitch={pitch}
+              onPitchChange={setPitch}
+              age={age}
+              onAgeChange={setAge}
+              whisper={whisper}
+              onWhisperChange={setWhisper}
+              refAudio={refAudio}
+              onRefAudioChange={setRefAudio}
+              refText={refText}
+              onRefTextChange={setRefText}
+            />
+
+            <GenerationControls
+              speed={speed}
+              onSpeedChange={setSpeed}
+              quality={quality}
+              onQualityChange={setQuality}
+            />
+          </section>
         </main>
 
         <footer className="page__footer">

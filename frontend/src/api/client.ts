@@ -1,4 +1,13 @@
-import type { Dialect, HealthResponse, ModelInfo, TTSRequestParams, TTSResponse, VoiceOptions } from "../types/api";
+import type {
+  Dialect,
+  HealthResponse,
+  ModelInfo,
+  PipelineMode,
+  PreprocessResponse,
+  TTSRequestParams,
+  TTSResponse,
+  VoiceOptions,
+} from "../types/api";
 
 // In dev, Vite proxies /api to the FastAPI backend (see vite.config.ts). In
 // production the frontend build is served by FastAPI itself from the same
@@ -48,10 +57,27 @@ export async function getVoiceOptions(): Promise<VoiceOptions> {
   return res.json();
 }
 
-export async function synthesizeSpeech(params: TTSRequestParams): Promise<TTSResponse> {
+export async function getPreprocessPreview(
+  text: string,
+  dialect_id: string,
+  pipeline_mode: PipelineMode,
+  signal?: AbortSignal,
+): Promise<PreprocessResponse> {
+  const res = await fetch(`${BASE}/preprocess`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, dialect_id, pipeline_mode }),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorDetail(res));
+  return res.json();
+}
+
+function buildTtsForm(params: TTSRequestParams): FormData {
   const form = new FormData();
   form.set("text", params.text);
   form.set("mode", params.mode);
+  form.set("pipeline_mode", params.pipeline_mode);
   form.set("dialect_id", params.dialect_id);
   if (params.gender) form.set("gender", params.gender);
   form.set("pitch", params.pitch);
@@ -62,10 +88,87 @@ export async function synthesizeSpeech(params: TTSRequestParams): Promise<TTSRes
   form.set("quality", params.quality);
   form.set("guidance_scale", String(params.guidance_scale));
   if (params.ref_audio) form.set("ref_audio", params.ref_audio);
+  return form;
+}
 
-  const res = await fetch(`${BASE}/tts`, { method: "POST", body: form });
+export async function synthesizeSpeech(params: TTSRequestParams): Promise<TTSResponse> {
+  const res = await fetch(`${BASE}/tts`, { method: "POST", body: buildTtsForm(params) });
   if (!res.ok) throw new ApiError(res.status, await parseErrorDetail(res));
   return res.json();
+}
+
+/** One sentence-chunk of audio from `POST /api/tts/stream` — see
+ * `backend/app/api/tts.py`'s `_stream_events` for the server side. */
+export interface StreamChunkEvent {
+  chunk_index: number;
+  chunk_text: string;
+  audio_base64: string;
+  content_type: string;
+  sample_rate: number;
+  audio_duration_ms: number;
+  /** Milliseconds since the request started — chunk 0's value is the
+   * time-to-first-audio measurement the streaming endpoint exists for. */
+  elapsed_ms: number;
+  is_final: boolean;
+  warnings: string[];
+}
+
+export interface StreamDoneEvent {
+  chunk_count: number;
+  ttfa_ms: number | null;
+  total_ms: number;
+  total_audio_duration_ms: number;
+  real_time_factor: number;
+  warnings: string[];
+}
+
+function parseSseBlock(block: string): { type: string; data: unknown } | null {
+  let type = "message";
+  let dataLine: string | null = null;
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event: ")) type = line.slice("event: ".length);
+    else if (line.startsWith("data: ")) dataLine = line.slice("data: ".length);
+  }
+  if (dataLine === null) return null;
+  return { type, data: JSON.parse(dataLine) };
+}
+
+/** Consumes the sentence-chunked SSE stream from `POST /api/tts/stream`,
+ * invoking `onChunk` as each sentence's audio arrives, and resolving with
+ * the closing `done` event's aggregate stats once the stream ends. */
+export async function synthesizeSpeechStream(
+  params: TTSRequestParams,
+  { onChunk, signal }: { onChunk: (chunk: StreamChunkEvent) => void; signal?: AbortSignal },
+): Promise<StreamDoneEvent> {
+  const res = await fetch(`${BASE}/tts/stream`, { method: "POST", body: buildTtsForm(params), signal });
+  if (!res.ok) throw new ApiError(res.status, await parseErrorDetail(res));
+  if (!res.body) throw new ApiError(0, "المتصفح لا يدعم قراءة الاستجابة كتيار بيانات");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let done: StreamDoneEvent | null = null;
+
+  while (true) {
+    const { value, done: streamEnded } = await reader.read();
+    if (streamEnded) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sepIndex: number;
+    while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
+      const block = buffer.slice(0, sepIndex);
+      buffer = buffer.slice(sepIndex + 2);
+      const event = parseSseBlock(block);
+      if (!event) continue;
+      if (event.type === "chunk") onChunk(event.data as StreamChunkEvent);
+      else if (event.type === "done") done = event.data as StreamDoneEvent;
+      else if (event.type === "error") {
+        const detail = event.data as { message?: string };
+        throw new ApiError(502, detail.message ?? "فشل التوليد التدريجي");
+      }
+    }
+  }
+  if (!done) throw new ApiError(0, "انقطع البث قبل اكتماله");
+  return done;
 }
 
 /** Decodes a base64 audio payload into a plain ArrayBuffer — used both to

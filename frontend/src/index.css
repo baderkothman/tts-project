@@ -36,7 +36,10 @@
   --font-body: "IBM Plex Sans Arabic", "IBM Plex Sans", system-ui, sans-serif;
   --font-latin: "IBM Plex Sans", system-ui, sans-serif;
 
-  --container-width: 760px;
+  /* Wide enough for the composer's three columns (text/audio/settings)
+     to each get real room; 760px was sized for the old single-column
+     stack. */
+  --container-width: 1180px;
 }
 
 @media (prefers-color-scheme: dark) {

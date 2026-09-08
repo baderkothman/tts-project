@@ -94,15 +94,60 @@
 
 /* ---------- composer card ---------- */
 
+/* Three columns: text (right), generated audio (middle), settings (left).
+   The page is `dir="rtl"` (frontend/index.html), so grid auto-placement
+   already lays these out right-to-left in source order — no explicit
+   grid-column/order needed to get text-column on the right. */
 .composer-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 24px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  align-items: stretch; /* equal-height columns so the divider between them runs edge to edge */
+  gap: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.composer-col {
   display: flex;
   flex-direction: column;
   gap: 22px;
-  box-shadow: var(--shadow-sm);
+  min-width: 0; /* let a long textarea/waveform shrink instead of blowing out its grid column */
+  padding-inline-end: 24px;
+}
+
+.composer-col:last-child {
+  padding-inline-end: 0;
+}
+
+/* Divider between columns, drawn in the middle of what used to be a bare
+   `gap` — without it, differing column heights (settings is usually much
+   taller than the audio column) read as an unstructured jumble with no
+   line telling the eye where one section ends and the next begins. */
+.composer-col + .composer-col {
+  padding-inline-start: 24px;
+  border-inline-start: 1px solid var(--line);
+}
+
+@media (max-width: 900px) {
+  .composer-card {
+    grid-template-columns: 1fr;
+    row-gap: 24px;
+  }
+
+  .composer-col,
+  .composer-col:last-child {
+    padding-inline-end: 0;
+  }
+
+  .composer-col + .composer-col {
+    padding-inline-start: 0;
+    padding-top: 24px;
+    border-inline-start: none;
+    border-top: 1px solid var(--line);
+  }
 }
 
 @media (max-width: 560px) {
@@ -376,6 +421,103 @@
   margin-top: 14px;
 }
 
+/* ---------- preprocessing preview ---------- */
+
+.preview summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview__loading-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brass);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.preview__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.preview__block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preview__label {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+
+.preview__text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: var(--ink-soft);
+}
+
+.preview__text--processed {
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.preview__segments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preview__segment {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.9rem;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  border-inline-start: 3px solid var(--line-strong);
+}
+
+.preview__segment--ar {
+  border-inline-start-color: var(--teal);
+}
+
+.preview__segment--en {
+  border-inline-start-color: var(--brass);
+}
+
+.preview__segment-tag {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  min-width: 3.5em;
+}
+
+.preview__segment-badge {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--teal-deep);
+  background: var(--teal-soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.preview__warnings {
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 0.8rem;
+  color: var(--brass);
+}
+
 /* ---------- reference audio dropzone ---------- */
 
 .dropzone {
@@ -420,6 +562,20 @@
   padding: 3px 10px;
   font-size: 0.78rem;
   color: var(--clay);
+}
+
+/* ---------- streaming demo (POST /api/tts/stream) ---------- */
+
+.streaming-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.streaming-demo__status {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
 }
 
 /* ---------- error banner ---------- */
@@ -574,6 +730,14 @@
 
 .waveform {
   flex: 1;
+  /* Without this, a flex item's automatic min-width is its content's
+     min-content size — here, 96 bars x their own `min-width: 2px` floor
+     (~380px), regardless of how little room the column actually has. That
+     silently forced this whole row wider than its grid column and spilled
+     the waveform into whatever sat next to it (reproduced directly: in the
+     3-column composer layout, it bled into the dialect chips beside it). */
+  min-width: 0;
+  overflow: hidden; /* clip rather than spill if the floor is ever hit anyway */
   position: relative;
   height: 40px;
   display: flex;

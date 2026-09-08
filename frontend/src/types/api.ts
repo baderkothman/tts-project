@@ -7,6 +7,7 @@ export type Pitch = "very low pitch" | "low pitch" | "moderate pitch" | "high pi
 export type AgeGroup = "child" | "teenager" | "young adult" | "middle-aged" | "elderly";
 export type Quality = "fast" | "high";
 export type Mode = "voice_design" | "clone" | "auto";
+export type PipelineMode = "native" | "dual_model" | "transliteration";
 
 export interface Dialect {
   id: string;
@@ -32,6 +33,8 @@ export interface ModelCapabilities {
   dialect_control: boolean;
   diacritics_aware: boolean;
   named_voice_roster: boolean;
+  automatic_diacritization: boolean;
+  mixed_language_support: boolean;
 }
 
 export interface ModelInfo {
@@ -42,6 +45,23 @@ export interface ModelInfo {
   sample_rate: number;
   dialects_supported: number;
   capabilities: ModelCapabilities;
+  pipeline_modes: PipelineMode[];
+  diacritizer_loaded: boolean;
+  english_tts_loaded: boolean;
+}
+
+export interface SegmentInfo {
+  language: "ar" | "en";
+  original_text: string;
+  speak_text: string;
+  diacritized: boolean;
+}
+
+export interface PreprocessResponse {
+  original_text: string;
+  processed_text: string;
+  segments: SegmentInfo[];
+  warnings: string[];
 }
 
 export interface HealthResponse {
@@ -62,15 +82,19 @@ export interface TTSResponse {
   content_type: string;
   sample_rate: number;
   mode: Mode;
+  pipeline_mode: PipelineMode;
   dialect_id: string | null;
   gender: Gender | null;
   latency: LatencyInfo;
+  processed_text: string;
+  segments: SegmentInfo[];
   warnings: string[];
 }
 
 export interface TTSRequestParams {
   text: string;
   mode: Mode;
+  pipeline_mode: PipelineMode;
   dialect_id: string;
   gender: Gender | null;
   pitch: Pitch;

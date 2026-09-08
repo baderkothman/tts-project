@@ -1,10 +1,13 @@
 """FastAPI application entry point.
 
-Loads `oddadmix/lahgtna-omnivoice-v2` exactly once, at startup, via
-`TTSEngine.load()` run off the event loop in a worker thread — the process
-accepts `/api/health` immediately and reports `status: "loading"` until the
-one-time load (weight download on first run, then just weight loading)
-finishes, rather than blocking the whole server on it.
+Loads every model exactly once, at startup, each off the event loop in its
+own worker thread so they load in parallel rather than one after another:
+`oddadmix/lahgtna-omnivoice-v2` (required — `/api/tts` 503s until it's
+ready), the Fine-Tashkeel diacritizer, and Kokoro (English TTS for the
+`dual_model` pipeline mode). The latter two are best-effort: a failure
+there degrades gracefully (diacritization is skipped, `dual_model` falls
+back to `native`) rather than blocking the whole app on a non-essential
+model. `/api/health` responds immediately regardless.
 
 No request text or generated audio is ever logged.
 """
@@ -22,7 +25,9 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.app.api import tts
 from backend.app.config import get_settings
+from backend.app.services import diacritizer, english_tts
 from backend.app.services.inference import TTSEngine
+from backend.app.services.speech_pipeline import SpeechPipeline
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("lahgtna.main")
@@ -30,21 +35,49 @@ logger = logging.getLogger("lahgtna.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # `transformers` lazily binds most of its submodule attributes on first
+    # access (a `LazyModule.__getattr__`); triggering that resolution here,
+    # once, on the main thread, before the three loaders below run
+    # concurrently in their own threads avoids a real race hit during this
+    # feature's own development — two threads independently resolving a
+    # transformers submodule name for the first time at the same moment
+    # raised a spurious `ImportError: cannot import name 'AlbertModel'`
+    # that did not reproduce when importing it a second time.
+    import transformers
+
+    for _name in ("AutoTokenizer", "AutoModelForSeq2SeqLM", "AlbertModel"):
+        getattr(transformers, _name)
+
     settings = get_settings()
     engine = TTSEngine(settings)
     app.state.engine = engine
+    app.state.pipeline = SpeechPipeline(engine)
 
-    async def _load() -> None:
+    async def _load_arabic() -> None:
         try:
             await asyncio.to_thread(engine.load)
         except Exception:  # noqa: BLE001 - already logged in TTSEngine.load
-            logger.error("Model failed to load — /api/tts will return 503 until this is fixed")
+            logger.error("Lahgtna failed to load — /api/tts will return 503 until this is fixed")
 
-    load_task = asyncio.create_task(_load())
+    async def _load_diacritizer() -> None:
+        try:
+            await asyncio.to_thread(diacritizer.load)
+        except Exception:  # noqa: BLE001
+            logger.warning("Diacritizer failed to load — Arabic text will be spoken undiacritized")
+
+    async def _load_english_tts() -> None:
+        await asyncio.to_thread(english_tts.load)  # never raises — records load_error() instead
+
+    tasks = [
+        asyncio.create_task(_load_arabic()),
+        asyncio.create_task(_load_diacritizer()),
+        asyncio.create_task(_load_english_tts()),
+    ]
     try:
         yield
     finally:
-        load_task.cancel()
+        for task in tasks:
+            task.cancel()
 
 
 app = FastAPI(

@@ -17,11 +17,13 @@ node_modules/
 .hf_cache/
 
 # Generated audio — not persisted by default, except durable evidence saved
-# deliberately under docs/audio/ (docs/TTS_MODEL_EVALUATION.md)
+# deliberately under docs/audio/ (docs/TTS_MODEL_EVALUATION.md, docs/SAMPLE_GALLERY.md).
+# `!dir/*.ext` isn't recursive, so docs/audio/samples/ needs its own line too.
 *.mp3
 *.wav
 !docs/audio/*.mp3
 !docs/audio/*.wav
+!docs/audio/samples/*.wav
 
 # OS / editor
 .DS_Store

@@ -12,6 +12,17 @@ dependencies = [
     "omnivoice>=0.2.1",
     "soundfile>=0.12",
     "numpy>=1.26",
+    "transformers>=5.3",
+    # Arabic diacritization (services/diacritizer.py) — basharalrfooh/Fine-Tashkeel
+    # is a plain AutoModelForSeq2SeqLM/AutoTokenizer pair, loaded via `transformers`
+    # above; no extra package needed for it specifically.
+    "num2words>=0.5.13",
+    # English TTS for the dual_model pipeline mode (services/english_tts.py).
+    # Needs the espeak-ng system library: `brew install espeak-ng` (macOS) /
+    # `apt install espeak-ng` (Debian/Ubuntu).
+    "kokoro>=0.9.2",
+    "phonemizer-fork>=3.3",
+    "pyloudnorm>=0.2",
 ]
 
 [project.optional-dependencies]
