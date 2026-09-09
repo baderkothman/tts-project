@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "../constants";
 import type {
   Dialect,
   HealthResponse,
@@ -10,9 +11,12 @@ import type {
 } from "../types/api";
 
 // In dev, Vite proxies /api to the FastAPI backend (see vite.config.ts). In
-// production the frontend build is served by FastAPI itself from the same
-// origin, so a relative path works unchanged in both.
-const BASE = "/api";
+// the single-container deployment mode, the frontend build is served by
+// FastAPI itself from the same origin. In the split-service deployment
+// (frontend and backend as separate Railway services — see
+// frontend/Dockerfile), API_BASE_URL is the backend's own origin, baked in
+// at build time. All three cases are just "what does BASE resolve to".
+const BASE = `${API_BASE_URL}/api`;
 
 export class ApiError extends Error {
   status: number;

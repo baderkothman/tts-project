@@ -4,7 +4,7 @@ Env-only — no secret or path is ever hardcoded. TTS synthesis itself needs
 exactly one model, loaded from Hugging Face Hub
 (`oddadmix/lahgtna-omnivoice-v2`), with no provider credential to manage —
 unlike the prior Groq-based phase. The one exception is `openai_api_key`
-below: an *optional* credential for the opt-in AI dialect rewrite step
+below: an *optional* credential for the automatic AI dialect rewrite step
 (services/dialect_rewriter.py), which never touches audio generation.
 """
 
@@ -58,8 +58,23 @@ class Settings(BaseSettings):
     request_timeout_s: float = 120.0
     max_input_chars: int = 2000
 
+    # Comma-separated allowed CORS origins, beyond the two dev-server ones
+    # main.py already always allows (Vite's own :5173). Only matters for the
+    # split-service deployment (frontend/Dockerfile as its own Railway
+    # service, calling this backend cross-origin) — the single-container
+    # mode (FastAPI serving frontend/dist/ itself) is same-origin and never
+    # needs this. Empty string (the default) means no extra origins are
+    # allowed, matching this app's existing single-container deployment
+    # until a split frontend's public URL is set here.
+    cors_allowed_origins: str = ""
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
     # Optional AI dialect rewrite step (services/dialect_rewriter.py) — an
-    # opt-in, per-request feature, not a core dependency of this app the
+    # automatic (not per-request opt-in — see that module's docstring),
+    # optional-credential feature, not a core dependency of this app the
     # way the TTS model is. `None` means the feature is simply unavailable
     # (reported honestly via /api/model-info's dialect_rewriter_configured)
     # rather than raising at startup.

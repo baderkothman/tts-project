@@ -1,8 +1,10 @@
 import { ApiError } from "./client";
+import { API_BASE_URL } from "../constants";
 import type { AvatarJobEvent, AvatarJobResponse, EmotionName, EmotionsResponse } from "../types/avatar";
 import type { Gender, Pitch } from "../types/api";
 
-const BASE = "/api/tts/avatar";
+// See client.ts's own BASE — same reasoning, same API_BASE_URL source.
+const BASE = `${API_BASE_URL}/api/tts/avatar`;
 
 async function parseErrorDetail(res: Response): Promise<string> {
   try {
@@ -47,7 +49,18 @@ export async function createAvatarJob(params: AvatarGenerationParams): Promise<{
 export async function getAvatarJob(jobId: string): Promise<AvatarJobResponse> {
   const res = await fetch(`${BASE}/jobs/${jobId}`);
   if (!res.ok) throw new ApiError(res.status, await parseErrorDetail(res));
-  return res.json();
+  const job = (await res.json()) as AvatarJobResponse;
+  // video_url/audio_url come back as backend-relative paths ("/api/...") —
+  // fine when this frontend and the backend share an origin, wrong once
+  // they're split across two Railway services: resolved here, once, so
+  // every consumer (<video src>, download links) just works regardless of
+  // deployment topology, instead of every call site needing to know about
+  // API_BASE_URL itself.
+  return {
+    ...job,
+    video_url: job.video_url ? `${API_BASE_URL}${job.video_url}` : null,
+    audio_url: job.audio_url ? `${API_BASE_URL}${job.audio_url}` : null,
+  };
 }
 
 export async function cancelAvatarJob(jobId: string): Promise<{ cancelled: boolean }> {

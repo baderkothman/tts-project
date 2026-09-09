@@ -115,12 +115,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Dev-time convenience only: allows `vite dev` on a different port to reach
-# the API directly. In production the frontend build is served from this
-# same origin (mounted below), so this never matters there.
+# The two dev-server origins are always allowed (Vite's own :5173) — that
+# never depends on configuration, same as before this app supported a split
+# deployment. `CORS_ALLOWED_ORIGINS` (config.py's cors_allowed_origins_list)
+# adds to that list — set it to a split frontend service's public URL (see
+# frontend/Dockerfile's own docstring) once the frontend isn't served from
+# this same origin (the StaticFiles mount below) anymore. Empty by default,
+# so the single-container deployment mode needs no extra configuration.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        *get_settings().cors_allowed_origins_list,
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )

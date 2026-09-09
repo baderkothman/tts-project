@@ -1,22 +1,17 @@
-# Single-process deployment: FastAPI serves both the API and the built
-# frontend from one origin (backend/app/main.py already mounts
-# frontend/dist/ when present — this is that mode, not a new one).
+# Backend-only image: this builds and runs the FastAPI API alone — the
+# frontend is a separate service now (see frontend/Dockerfile), deployed and
+# scaled independently so a frontend-only change never restarts this
+# process and forces the multi-GB TTS models back through a cold load.
+# `backend/app/main.py` still mounts frontend/dist/ when present (a real,
+# still-supported single-container mode for local/simple deployments) — it
+# just never finds it in *this* image, since nothing copies it in anymore.
 #
 # Model weights (~2.4GB Lahgtna + ~1.2GB Fine-Tashkeel) are NOT baked into
 # this image — they download on first boot into $HF_HOME via the same
 # `omnivoice`/`transformers` from_pretrained() calls used locally. On
-# Railway, mount a persistent Volume at $HF_HOME (see README's "Deploy
-# (Railway)" section) so a redeploy doesn't pay that download again.
+# Railway, mount a persistent Volume at $HF_HOME (see DEPLOY.md) so a
+# redeploy doesn't pay that download again.
 
-# ---------- Stage 1: build the frontend ----------
-FROM node:22-slim AS frontend-build
-WORKDIR /app
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
-# ---------- Stage 2: Python runtime ----------
 FROM python:3.12-slim AS runtime
 
 # espeak-ng: Kokoro's phonemizer + the transliteration fallback
@@ -49,8 +44,6 @@ COPY pyproject.toml ./
 COPY backend/__init__.py ./backend/__init__.py
 COPY backend/app/ ./backend/app/
 RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu .
-
-COPY --from=frontend-build /app/dist ./frontend/dist
 
 # Overridable at deploy time (Railway env vars) — this is just the
 # container-local default so `docker run` alone works for a smoke test.
