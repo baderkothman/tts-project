@@ -55,10 +55,16 @@ class SpeechPipeline:
         # DialectRewriteError propagates uncaught here, exactly like
         # InferenceError does below — the API layer (api/tts.py) catches
         # both by their shared (kind, message) shape.
+        #
+        # `enabled` is never a request field: the rewrite is automatic
+        # whenever the server has it configured, not a per-request opt-in —
+        # see models/tts.py's module docstring for why. This is the one
+        # place per generation it's decided; /api/preprocess's live preview
+        # never touches this function at all.
         working_text, rewrite_warnings = await dialect_rewriter.maybe_rewrite(
             request.text,
             dialect_id=request.dialect_id,
-            enabled=request.ai_dialect_rewrite,
+            enabled=dialect_rewriter.is_configured(),
             # Gender only means anything in voice_design mode — a cloned
             # voice's gender comes from the reference clip, not this field.
             gender=request.gender if request.mode == "voice_design" else None,
@@ -106,8 +112,8 @@ class SpeechPipeline:
     ) -> PipelineResult:
         # Falls back to `working_text` — not `request.text` — when
         # preprocessing produces nothing speakable: `working_text` is
-        # already the AI-rewritten dialectal text when ai_dialect_rewrite
-        # is on (identical to request.text otherwise, so this changes
+        # already the AI-rewritten dialectal text whenever the automatic
+        # rewrite ran (identical to request.text otherwise, so this changes
         # nothing for the common case). Real bug this fixes: with
         # `request.text` here, an edge case where `preview.processed_text`
         # comes back empty silently spoke the *original, un-rewritten,
@@ -168,7 +174,7 @@ class SpeechPipeline:
         working_text, rewrite_warnings = await dialect_rewriter.maybe_rewrite(
             request.text,
             dialect_id=request.dialect_id,
-            enabled=request.ai_dialect_rewrite,
+            enabled=dialect_rewriter.is_configured(),
             gender=request.gender if request.mode == "voice_design" else None,
         )
         preview = text_preprocessor.preprocess(

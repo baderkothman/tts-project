@@ -65,11 +65,12 @@ class AvatarGenerationRequest(BaseModel):
     quality: Quality = "high"
     guidance_scale: float = Field(default=2.0, ge=1.0, le=4.0)
     emotion: EmotionName = DEFAULT_EMOTION
-    # Same opt-in AI dialect rewrite as TTSRequest's own field (see
-    # dialect_rewriter.py) — applied in avatar_jobs.py::_run_job *before*
-    # the TTSRequest for the audio step is built, so the processed text
-    # (not the raw typed text) is what actually gets spoken and cached.
-    ai_dialect_rewrite: bool = False
+    # No ai_dialect_rewrite field here on purpose — same reasoning as
+    # TTSRequest (see models/tts.py's module docstring). The AI dialect
+    # rewrite step runs automatically in avatar_jobs.py::_run_job, gated
+    # only on dialect_rewriter.is_configured(), *before* the TTSRequest for
+    # the audio step is built — so the processed text, not the raw typed
+    # text, is what actually gets spoken and cached.
 
     @field_validator("text")
     @classmethod

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, base64ToArrayBuffer, getDialects, getHealth, getModelInfo, synthesizeSpeech } from "./api/client";
+import { ApiError, base64ToArrayBuffer, getDialects, getHealth, synthesizeSpeech } from "./api/client";
 import { AudioPlayer } from "./components/AudioPlayer";
 import { useAvatarController } from "./components/avatar/useAvatarController";
 import { AvatarStudioPanel } from "./components/avatar-studio/AvatarStudioPanel";
@@ -69,9 +69,6 @@ export default function App() {
   // used unconditionally.
   const pipelineMode: PipelineMode = "native";
 
-  const [aiDialectRewrite, setAiDialectRewrite] = useState(false);
-  const [aiRewriteAvailable, setAiRewriteAvailable] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TTSResponse | null>(null);
@@ -108,25 +105,10 @@ export default function App() {
       .catch(() => setDialects([]));
   }, []);
 
-  // /api/model-info 503s until the TTS model finishes loading, so this
-  // waits for health to report "ok" rather than firing once on mount.
-  useEffect(() => {
-    if (health?.status !== "ok") return;
-    getModelInfo()
-      .then((info) => setAiRewriteAvailable(info.dialect_rewriter_configured))
-      .catch(() => setAiRewriteAvailable(false));
-  }, [health?.status]);
-
   const selectedDialect = useMemo(() => dialects.find((d) => d.id === dialectId) ?? null, [dialects, dialectId]);
 
   const modelReady = health?.status === "ok";
-  const { preview, loading: previewLoading, setPreview } = usePreprocessPreview(
-    text,
-    dialectId,
-    pipelineMode,
-    aiDialectRewrite,
-    mode === "voice_design" ? gender : null,
-  );
+  const { preview, loading: previewLoading, setPreview } = usePreprocessPreview(text, dialectId, pipelineMode);
   const { state: streamState, start: startStream, stop: stopStream } = useStreamingSynthesis();
 
   const avatarState = useAvatarController({
@@ -153,9 +135,8 @@ export default function App() {
       quality,
       guidance_scale: 2.0,
       ref_audio: mode === "clone" ? refAudio : null,
-      ai_dialect_rewrite: aiDialectRewrite,
     }),
-    [text, mode, pipelineMode, dialectId, gender, pitch, refText, speed, quality, refAudio, aiDialectRewrite],
+    [text, mode, pipelineMode, dialectId, gender, pitch, refText, speed, quality, refAudio],
   );
 
   const handleGenerate = useCallback(async () => {
@@ -263,11 +244,7 @@ export default function App() {
         </nav>
 
         {activeTab === "avatar" ? (
-          <AvatarStudioPanel
-            dialects={dialects.length ? dialects : FALLBACK_DIALECTS}
-            modelReady={modelReady}
-            aiRewriteAvailable={aiRewriteAvailable}
-          />
+          <AvatarStudioPanel dialects={dialects.length ? dialects : FALLBACK_DIALECTS} modelReady={modelReady} />
         ) : (
         <main className="composer-card">
           {/* DOM order = visual order in this RTL layout: مساحة العمل (right) -> إعدادات (left).
@@ -321,9 +298,6 @@ export default function App() {
               dialects={dialects.length ? dialects : FALLBACK_DIALECTS}
               selectedId={dialectId}
               onSelect={setDialectId}
-              aiRewrite={aiDialectRewrite}
-              onAiRewriteChange={setAiDialectRewrite}
-              aiRewriteAvailable={aiRewriteAvailable}
             />
 
             <VoicePanel
@@ -355,8 +329,9 @@ export default function App() {
             <span className="ltr-num" dir="ltr">
               oddadmix/lahgtna-omnivoice-v2
             </span>{" "}
-            ويعمل محليًا بالكامل. إعادة الصياغة اللهجية الاختيارية عبر OpenAI هي الاستثناء الوحيد
-            الذي يُرسل النص إلى مزوّد خارجي.
+            ويعمل محليًا بالكامل. إعادة الصياغة اللهجية التلقائية عبر OpenAI (عند توفّرها على
+            الخادم) هي الاستثناء الوحيد الذي يُرسل النص إلى مزوّد خارجي، ولا تُستدعى إلا عند
+            الضغط على "ولّد الصوت".
           </p>
         </footer>
       </div>

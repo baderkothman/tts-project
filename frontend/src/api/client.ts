@@ -1,6 +1,5 @@
 import type {
   Dialect,
-  Gender,
   HealthResponse,
   ModelInfo,
   PipelineMode,
@@ -62,14 +61,12 @@ export async function getPreprocessPreview(
   text: string,
   dialect_id: string,
   pipeline_mode: PipelineMode,
-  ai_dialect_rewrite: boolean,
-  gender: Gender | null,
   signal?: AbortSignal,
 ): Promise<PreprocessResponse> {
   const res = await fetch(`${BASE}/preprocess`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, dialect_id, pipeline_mode, ai_dialect_rewrite, gender }),
+    body: JSON.stringify({ text, dialect_id, pipeline_mode }),
     signal,
   });
   if (!res.ok) throw new ApiError(res.status, await parseErrorDetail(res));
@@ -89,7 +86,6 @@ function buildTtsForm(params: TTSRequestParams): FormData {
   form.set("quality", params.quality);
   form.set("guidance_scale", String(params.guidance_scale));
   if (params.ref_audio) form.set("ref_audio", params.ref_audio);
-  form.set("ai_dialect_rewrite", String(params.ai_dialect_rewrite));
   return form;
 }
 

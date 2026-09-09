@@ -21,7 +21,6 @@ export interface AvatarGenerationParams {
   pitch: Pitch;
   emotion: EmotionName;
   portrait: File;
-  aiDialectRewrite: boolean;
 }
 
 export async function getAvatarEmotions(): Promise<EmotionsResponse> {
@@ -38,7 +37,6 @@ export async function createAvatarJob(params: AvatarGenerationParams): Promise<{
   if (params.gender) form.set("gender", params.gender);
   form.set("pitch", params.pitch);
   form.set("emotion", params.emotion);
-  form.set("ai_dialect_rewrite", String(params.aiDialectRewrite));
   form.set("portrait", params.portrait);
 
   const res = await fetch(BASE, { method: "POST", body: form });

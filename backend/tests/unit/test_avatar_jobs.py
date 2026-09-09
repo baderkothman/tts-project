@@ -12,7 +12,7 @@ import pytest
 
 from backend.app.config import Settings
 from backend.app.models.avatar import AvatarGenerationRequest, TERMINAL_STATUSES
-from backend.app.services import avatar_jobs as avatar_jobs_module
+from backend.app.services import dialect_rewriter
 from backend.app.services import diacritizer, text_preprocessor
 from backend.app.services.avatar_engines.fake_engine import FakeAvatarEngine
 from backend.app.services.avatar_jobs import AvatarJobLimitError, AvatarJobManager
@@ -186,38 +186,40 @@ async def test_tts_engine_failure_surfaces_with_its_own_kind(tmp_path):
         await manager.stop()
 
 
-async def test_ai_dialect_rewrite_processed_text_is_what_gets_spoken(tmp_path, monkeypatch):
-    """Mirrors the /api/tts flow: when ai_dialect_rewrite is on, the
-    dialect-rewritten/diacritized text — not the raw typed text — is what
-    reaches the TTS engine. dialect_rewriter.rewrite() itself is mocked
-    (no real OpenAI call, no OPENAI_API_KEY needed); maybe_rewrite() runs
-    for real so the "enabled=False is a no-op" contract stays covered too."""
+async def test_dialect_rewrite_runs_automatically_when_configured(tmp_path, monkeypatch):
+    """The AI dialect rewrite is no longer a per-request opt-in — it runs
+    automatically inside SpeechPipeline.synthesize() whenever
+    dialect_rewriter.is_configured() is true (see that module's docstring).
+    is_configured() is forced True here to simulate a deployment that has
+    OPENAI_API_KEY set (the suite-wide conftest.py fixture defaults it to
+    False so no test touches the real API); rewrite() itself is mocked, no
+    real OpenAI call either way."""
+    monkeypatch.setattr(dialect_rewriter, "is_configured", lambda: True)
 
     async def fake_rewrite(text, *, dialect_id, gender=None):
         assert dialect_id == "saudi"
         return "نص معاد صياغته ومُشكَّل"
 
-    monkeypatch.setattr(avatar_jobs_module.dialect_rewriter, "rewrite", fake_rewrite)
+    monkeypatch.setattr(dialect_rewriter, "rewrite", fake_rewrite)
 
     engine = FakeEngine()
     manager = AvatarJobManager(pipeline=SpeechPipeline(engine), engine=FakeAvatarEngine(), settings=_settings(tmp_path))
     manager.start()
     try:
-        job = manager.create_job(_request(ai_dialect_rewrite=True), portrait=_portrait(), ref_audio_bytes=None)
+        job = manager.create_job(_request(), portrait=_portrait(), ref_audio_bytes=None)
         final = await _wait_for(manager, job.id, lambda j: j.status in TERMINAL_STATUSES)
 
         assert final.status == "completed"
         assert any("rewritten for" in w.lower() for w in final.warnings)
         assert engine.calls, "TTS engine was never called"
         assert engine.calls[-1].text == "نص معاد صياغته ومُشكَّل"
-        # The rewrite already happened once in avatar_jobs.py — SpeechPipeline
-        # must not be asked to do it again.
-        assert engine.calls[-1].ai_dialect_rewrite is False
     finally:
         await manager.stop()
 
 
-async def test_ai_dialect_rewrite_off_by_default_leaves_text_untouched(tmp_path):
+async def test_dialect_rewrite_skipped_when_not_configured(tmp_path):
+    # No monkeypatching needed: the suite-wide conftest.py fixture already
+    # defaults dialect_rewriter.is_configured() to False.
     engine = FakeEngine()
     manager = AvatarJobManager(pipeline=SpeechPipeline(engine), engine=FakeAvatarEngine(), settings=_settings(tmp_path))
     manager.start()
@@ -233,15 +235,17 @@ async def test_ai_dialect_rewrite_off_by_default_leaves_text_untouched(tmp_path)
 
 
 async def test_dialect_rewrite_failure_surfaces_as_a_failed_job(tmp_path, monkeypatch):
+    monkeypatch.setattr(dialect_rewriter, "is_configured", lambda: True)
+
     async def fake_rewrite(text, *, dialect_id, gender=None):
         raise DialectRewriteError("upstream_error", "induced dialect rewrite failure")
 
-    monkeypatch.setattr(avatar_jobs_module.dialect_rewriter, "rewrite", fake_rewrite)
+    monkeypatch.setattr(dialect_rewriter, "rewrite", fake_rewrite)
 
     manager = AvatarJobManager(pipeline=SpeechPipeline(FakeEngine()), engine=FakeAvatarEngine(), settings=_settings(tmp_path))
     manager.start()
     try:
-        job = manager.create_job(_request(ai_dialect_rewrite=True), portrait=_portrait(), ref_audio_bytes=None)
+        job = manager.create_job(_request(), portrait=_portrait(), ref_audio_bytes=None)
         final = await _wait_for(manager, job.id, lambda j: j.status in TERMINAL_STATUSES)
         assert final.status == "failed"
         assert final.error_kind == "upstream_error"

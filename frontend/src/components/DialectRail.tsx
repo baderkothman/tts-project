@@ -4,16 +4,10 @@ export function DialectRail({
   dialects,
   selectedId,
   onSelect,
-  aiRewrite,
-  onAiRewriteChange,
-  aiRewriteAvailable,
 }: {
   dialects: Dialect[];
   selectedId: string;
   onSelect: (id: string) => void;
-  aiRewrite: boolean;
-  onAiRewriteChange: (enabled: boolean) => void;
-  aiRewriteAvailable: boolean;
 }) {
   return (
     <div className="field">
@@ -39,25 +33,6 @@ export function DialectRail({
           هذه اللهجة لا تملك مُعامل نموذج مستقل بعد — يعتمد نطقها على العامية التي تكتبها في
           النص نفسه.
         </p>
-      )}
-
-      <label className="checkbox-row" title={aiRewriteAvailable ? undefined : "يتطلب إعداد OPENAI_API_KEY على الخادم"}>
-        <input
-          type="checkbox"
-          checked={aiRewrite}
-          disabled={!aiRewriteAvailable}
-          onChange={(e) => onAiRewriteChange(e.target.checked)}
-        />
-        إعادة صياغة باللهجة عبر OpenAI (تشكيل تلقائي)
-      </label>
-      {aiRewrite && aiRewriteAvailable && (
-        <p className="field__hint">
-          سيُرسل النص المكتوب إلى OpenAI لإعادة صياغته وتشكيله حسب اللهجة المختارة قبل
-          التوليد. أي كلمات إنجليزية تبقى كما هي دون ترجمة أو تحويل إلى حروف عربية.
-        </p>
-      )}
-      {!aiRewriteAvailable && (
-        <p className="field__hint">غير متاحة على هذا الخادم — يتطلب إعداد OPENAI_API_KEY.</p>
       )}
     </div>
   );

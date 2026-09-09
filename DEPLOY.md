@@ -77,9 +77,10 @@ apply to a typical Railway deploy:
    - `HF_TOKEN` — optional; raises Hugging Face Hub's anonymous download
      rate limit for the first boot's ~3.6GB pull. Not needed for TTS
      synthesis itself.
-   - `OPENAI_API_KEY` — optional; only enables the opt-in "AI dialect
-     rewrite" toggle (`services/dialect_rewriter.py`, see README). Leave it
-     unset and that toggle is reported unavailable; everything else on this
+   - `OPENAI_API_KEY` — optional; enables the automatic AI dialect rewrite
+     step (`services/dialect_rewriter.py`, see README) — no toggle, it just
+     runs on every generation once this is set. Leave it unset and it's
+     reported unavailable and silently skipped; everything else on this
      deploy works identically without it.
    - `HF_HUB_DISABLE_XET=1` — see "A disk-space bug" below. Xet-based
      downloads need roughly 2x a file's size in transient staging space

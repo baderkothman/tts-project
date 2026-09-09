@@ -23,12 +23,15 @@ from backend.app.models.tts import TTSRequest
 
 
 def cache_key(request: TTSRequest, *, model_repo_id: str, ref_audio_bytes: bytes | None) -> str:
-    """Deliberately excludes `ai_dialect_rewrite` from the key material:
-    that flag only affects what `working_text` OpenAI hands back *before*
-    this request's own `.text` is set — by the time a `TTSRequest` reaches
-    here (already carrying its final `.text`), two requests with identical
-    resulting text/voice fields but a different `ai_dialect_rewrite` value
-    are asking the model for genuinely identical audio."""
+    """Called in `avatar_jobs.py::_synthesize_audio` *before*
+    `SpeechPipeline.synthesize()` runs — so `request.text` here is still the
+    raw, un-rewritten text, and the AI dialect rewrite step (automatic
+    inside `synthesize()`, see `dialect_rewriter.py`) never even runs on a
+    cache hit. That's deliberate, not an oversight: two jobs with identical
+    raw text/dialect/voice fields are the same request as far as this cache
+    is concerned, and reusing the first one's audio means the second one
+    pays for neither the OpenAI rewrite call nor the TTS model call — the
+    real cost saving this cache exists for."""
     parts = [
         request.text,
         request.mode,

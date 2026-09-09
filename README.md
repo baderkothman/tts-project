@@ -11,10 +11,13 @@ provider ever generates audio — and no fallback to one. (Kokoro-82M, also loca
 open-source, is used only as a selectable *alternative* for English words — see
 [Mixed Arabic/English speech](#mixed-arabicenglish-speech) below.)
 
-The one deliberate exception: an **opt-in** "AI dialect rewrite" toggle sends the typed
-text (never audio) to OpenAI to rewrite it into the chosen dialect's wording before
-synthesis — off by default, and the rest of the app works identically without it. See
-[AI dialect rewrite (optional, OpenAI)](#ai-dialect-rewrite-optional-openai) below.
+The one deliberate exception: an **automatic** AI dialect rewrite step sends the typed
+text (never audio) to OpenAI to rewrite it into the chosen dialect's wording — and fully
+diacritize it — right before synthesis, whenever the server has `OPENAI_API_KEY` set.
+There is no per-request toggle: it's just part of what "generate speech" does, triggered
+once per generate click, never while typing or picking a dialect. Unset the key and it's
+silently skipped — the rest of the app works identically without it. See
+[AI dialect rewrite (automatic, OpenAI)](#ai-dialect-rewrite-automatic-openai) below.
 
 This is the third phase of this repository's Arabic TTS work. The first two phases
 (`specs/001-arabic-tts-prototype/`, `specs/002-saudi-tts-prototype/`) used hosted vendor
@@ -31,9 +34,10 @@ Hub's anonymous download rate limit, nothing else needs it. One system dependenc
 `espeak-ng` (`brew install espeak-ng` / `apt install espeak-ng`), needed for Kokoro's
 phonemizer and for the English-transliteration fallback — see below.
 
-**Yes, for the opt-in AI dialect rewrite toggle only** — `OPENAI_API_KEY` in `.env`. Leave
-it unset and the toggle is simply reported unavailable (`/api/model-info`'s
-`dialect_rewriter_configured: false`); every other feature works unchanged.
+**Yes, for the automatic AI dialect rewrite step only** — `OPENAI_API_KEY` in `.env`. Leave
+it unset and it's simply reported unavailable (`/api/model-info`'s
+`dialect_rewriter_configured: false`) and silently skipped at generation time; every other
+feature works unchanged.
 
 ## Architecture
 
@@ -135,23 +139,36 @@ this, not caution for its own sake:
   use — e.g. colloquial "روح" ("go") came back "رُوحٍ", a genitive-case noun reading
   ("spirit/soul"). Full before/after examples in `docs/DIACRITIZATION_EVALUATION.md`.
 
-## AI dialect rewrite (optional, OpenAI)
+## AI dialect rewrite (automatic, OpenAI)
 
 Everything above only *conditions pronunciation* — it never changes the words the user
 typed. There is no local model in this app that rewrites an MSA-ish sentence into another
 dialect's actual vocabulary/phrasing; the user has always had to type dialectal Arabic
 themselves for that to come through.
 
-An opt-in checkbox (off by default, next to the dialect picker) fills that gap: when
-enabled, `services/dialect_rewriter.py` sends the typed text and chosen dialect to OpenAI
-(`gpt-5-mini` by default, `OPENAI_MODEL` overridable, `reasoning: "low"` — see the module
-docstring for why "minimal" was tried and rejected: faster but measurably unreliable, real
-garbled/doubled output sampled directly against the live API) and gets back the sentence
-rewritten in that dialect's real wording, fully diacritized for how it's actually spoken (no
-MSA case endings on dialectal words — the same rule the local diacritizer enforces). That
-output is then used as-is; the local Fine-Tashkeel diacritizer already refuses to
-re-diacritize text that already carries diacritics (see above), so no special-case bypass was
-needed to satisfy "use the AI output as-is."
+`services/dialect_rewriter.py` fills that gap — **automatically, not as a toggle**: every
+`POST /api/tts` (and avatar generation) call sends the typed text and chosen dialect to
+OpenAI (`gpt-5-mini` by default, `OPENAI_MODEL` overridable, `reasoning: "low"` — see the
+module docstring for why "minimal" was tried and rejected: faster but measurably
+unreliable, real garbled/doubled output sampled directly against the live API) and gets
+back the sentence rewritten in that dialect's real wording, fully diacritized for how it's
+actually spoken (no MSA case endings on dialectal words — the same rule the local
+diacritizer enforces) — gated only on whether `OPENAI_API_KEY` is set server-side
+(`dialect_rewriter.is_configured()`), never on a per-request field. Unset the key and it's
+silently skipped, exactly like before; nothing else changes. That output is then used as-is;
+the local Fine-Tashkeel diacritizer already refuses to re-diacritize text that already
+carries diacritics (see above), so no special-case bypass was needed to satisfy "use the AI
+output as-is."
+
+**Deliberately never triggered by typing or picking a dialect.** `POST /api/preprocess` —
+the live "what will be spoken" preview that fires on every debounced keystroke/dialect
+change — never calls this at all; it only runs the local, free diacritizer. Calling a paid
+external API on every keystroke would be real, unnecessary cost for no benefit the user asked
+for, so the rewrite is scoped to actual generation requests, triggered exactly once per
+"generate" click. The preview can therefore show slightly different wording than what
+actually gets spoken; the real response's `processed_text`/`segments` (surfaced right after
+generation) are authoritative for what was actually said — see `App.tsx`'s `handleGenerate`,
+which overwrites the preview panel with those the moment audio is ready.
 
 **The prompt's own diacritics instructions are not trusted as sufficient on their own** —
 real, reproduced live-API sampling found the model sometimes left a word completely
@@ -187,27 +204,24 @@ word untouched, and only rewrite/diacritize the surrounding Arabic. This also ma
 already-existing behavior for mixed-language text everywhere else in the app — `native`
 pipeline mode (below) already leaves English segments as-is.
 
-- **Opt-in, never automatic** — no request is silently rewritten, no surprise OpenAI cost.
-- **Disclosed, not hidden** — the toggle's own hint text says the text will be sent to
-  OpenAI; the footer names this as the one exception to the local-only claim above.
-- **Fails loudly, not silently** — if `OPENAI_API_KEY` is missing or the call fails while
-  the toggle is on, `/api/tts` returns an error (503/502) instead of quietly falling back
-  to unrewritten text the user didn't ask for.
+- **Automatic when configured, never per-request** — no request field turns this on or off;
+  it's decided once, server-side, by whether `OPENAI_API_KEY` is set. No surprise cost swing
+  between otherwise-identical requests, and one less setting for the user to think about —
+  the flow is just text → dialect → generate.
+- **Never triggered by typing or a dialect change** — see above; only an actual "generate"
+  click (`POST /api/tts`, `POST /api/tts/stream`, or an avatar generation) can call OpenAI.
+- **Disclosed, not hidden** — the response's own `warnings` array says the text was
+  rewritten via OpenAI (shown in the "ready to speak" preview panel after generation); the
+  footer names this as the one exception to the local-only claim above.
+- **Fails loudly, not silently** — if `OPENAI_API_KEY` is set but the call itself fails,
+  `/api/tts` returns an error (502) instead of quietly falling back to unrewritten text.
+  Unset entirely, it's a clean, silent skip — not an error.
 - **Validated directly against the live API while building this**, not just mocked: the
   dialect rewrite, the gender-agreement scoping (self vs. addressee vs. third person, across
   MSA/Saudi/Egyptian, both voice genders), the case-ending backstop, and the completeness
   retry were all sampled against the real endpoint — see git history for the specific cases.
   Broader native-speaker dialect-authenticity evaluation the way diacritization got
   (`docs/DIACRITIZATION_EVALUATION.md`) hasn't been done.
-- **The "ready to speak" preview and the actual generation are two independent calls** — the
-  live preview (`POST /api/preprocess`, debounced as you type) and `POST /api/tts` each make
-  their own OpenAI call when this is on, and the model isn't deterministic: two calls with
-  identical input can come back worded differently (though both are valid rewrites). Real
-  reproduced consequence: the preview panel could show one wording while the audio spoke
-  another. Fixed by making the preview panel authoritative for whatever was actually
-  generated — `App.tsx`'s `handleGenerate` overwrites it with the real response's
-  `processed_text`/`segments` the moment audio is ready, so the panel always matches the
-  audio currently loaded; the next edit's live preview naturally takes back over.
 
 ## Mixed Arabic/English speech
 
@@ -266,19 +280,22 @@ GET  /api/model-info    repo id, architecture, device, sample rate, capabilities
                          diacritizer/English-TTS load status, dialect_rewriter_configured
 GET  /api/dialects      the 9 real dialects + MSA
 GET  /api/voices        gender/pitch options (no named-voice roster — see above)
-POST /api/preprocess    JSON: text + dialect_id + pipeline_mode + ai_dialect_rewrite -> processed
-                         text + per-segment breakdown, no audio generated (the UI's live preview)
+POST /api/preprocess    JSON: text + dialect_id + pipeline_mode -> processed text + per-segment
+                         breakdown, no audio, no AI dialect rewrite (local-only — the UI's live
+                         preview; see "AI dialect rewrite" above for why it's excluded here)
 POST /api/tts           multipart/form-data: text + mode + pipeline_mode + dialect/voice options
-                         + ai_dialect_rewrite [+ ref_audio file] -> audio + the same
-                         processed-text/segments breakdown
+                         [+ ref_audio file] -> audio + the same processed-text/segments
+                         breakdown (the AI dialect rewrite runs automatically here, in
+                         addition to preprocessing, whenever OPENAI_API_KEY is set)
 POST /api/tts/stream    same request shape as /api/tts -> Server-Sent Events, one `chunk` per
                          sentence as its audio is ready, then a `done` event with real measured
                          time-to-first-audio (`ttfa_ms`) — see "Streaming and latency" below
 
 GET  /api/tts/avatar/emotions           the 6 real emotion presets — see "Talking Avatar" above
 POST /api/tts/avatar                    multipart/form-data: text + dialect/voice options +
-                                          emotion + ai_dialect_rewrite + portrait image ->
-                                          202 + {job_id}
+                                          emotion + portrait image -> 202 + {job_id} (same
+                                          automatic AI dialect rewrite as /api/tts, no field
+                                          needed to enable it)
 GET  /api/tts/avatar/jobs/{id}          job status/progress + video_url/audio_url once ready
 GET  /api/tts/avatar/jobs/{id}/events   Server-Sent Events progress stream (terminates on
                                           completed/failed/cancelled)
@@ -334,7 +351,7 @@ brew install ffmpeg      # or: apt install ffmpeg — needed by the Talking Avat
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -e ".[dev]"
 cp .env.example .env   # optional — no credentials required, except OPENAI_API_KEY for the
-                        # opt-in AI dialect rewrite toggle (see above)
+                        # automatic AI dialect rewrite step (see above)
 
 npm install   # root install — sets up both frontend/ and backend/ as npm workspaces (see below)
 ```
@@ -423,7 +440,7 @@ backend/app/
 │   ├── inference.py          # TTSEngine — the one OmniVoice (Arabic) instance, loaded once
 │   ├── english_tts.py         # Kokoro-82M wrapper, for dual_model mode
 │   ├── diacritizer.py         # Fine-Tashkeel wrapper — see docs/DIACRITIZATION_EVALUATION.md
-│   ├── dialect_rewriter.py    # opt-in OpenAI dialect rewrite — see "AI dialect rewrite" above
+│   ├── dialect_rewriter.py    # automatic OpenAI dialect rewrite — see "AI dialect rewrite" above
 │   ├── language_segmenter.py  # pure Unicode-script Arabic/English segmentation, no model
 │   ├── transliterator.py      # espeak-ng-driven phonetic EN->Arabic-script fallback
 │   ├── pronunciation_dictionary.py  # JSON-backed term overrides, applied before segmentation

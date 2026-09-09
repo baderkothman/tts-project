@@ -51,14 +51,13 @@ avatar-specific fork of preprocessing/diacritization/dialect handling. Swapping 
 engine later means changing which class `main.py` hands to `AvatarJobManager`
 (`engine=StubAvatarEngine()` → `engine=HFJobsAvatarEngine()`), nothing else.
 
-The **same** opt-in AI dialect rewrite `/api/tts` and `/api/preprocess` use
-(`dialect_rewriter.maybe_rewrite()`) is called directly from `_run_job()`'s `preprocessing`
-stage when `AvatarGenerationRequest.ai_dialect_rewrite` is set — still the one shared
-function, not a fork of it. Its output (the dialect-corrected, fully diacritized text) is
-what's actually handed to `SpeechPipeline.synthesize()` for the audio step, exactly
-mirroring "OpenAI rewrites/diacritizes → that text gets spoken" from the TTS tab. See
-"Caching" below for why this call happens *before* the `TTSRequest`/cache key are built,
-not by threading `ai_dialect_rewrite` through to `SpeechPipeline` itself.
+This also means the avatar audio step gets the automatic AI dialect rewrite for free, with
+zero avatar-specific code: `SpeechPipeline.synthesize()` (unmodified) already calls
+`dialect_rewriter.maybe_rewrite()` gated on `dialect_rewriter.is_configured()` — see
+`README.md`'s "AI dialect rewrite" section — and `avatar_jobs.py` never needs to know that
+happened. There is deliberately no `AvatarGenerationRequest` field for this (matching
+`TTSRequest` — see `models/tts.py`'s module docstring): it's a server-wide, automatic
+capability, not a per-request choice.
 
 ## The `AvatarEngine` abstraction
 
@@ -178,16 +177,18 @@ path-traversal surface exists in this feature.
 text+mode+dialect+gender+pitch+ref_text+speed+quality+guidance_scale+model_repo_id,
 plus reference-audio bytes when cloning) scoped to the avatar pipeline only. The existing
 standalone `POST /api/tts` is **untouched** — every call there still always regenerates,
-exactly as before this feature existed. Deliberately excludes `ai_dialect_rewrite` from
-the key itself (see `cache_key()`'s own docstring) — this is safe *because*
-`avatar_jobs.py::_run_job` runs the rewrite (`dialect_rewriter.maybe_rewrite`) before
-building the `TTSRequest` the cache key is computed from, not by passing
-`ai_dialect_rewrite` through to `SpeechPipeline.synthesize()` and letting it rewrite
-internally. By the time `cache_key()` sees the request, `.text` is already the final,
-dialect-rewritten/diacritized text (or the untouched original when the toggle is off) —
-two jobs that end up with different actual wording get different keys automatically,
-without the flag needing to be key material on its own. Folding in `model_repo_id` means a
-future model upgrade can never serve stale audio from a different model under the same key.
+exactly as before this feature existed.
+
+`avatar_jobs.py::_synthesize_audio` computes the cache key from the raw `TTSRequest`
+*before* calling `SpeechPipeline.synthesize()` — so the key is built from the raw, typed
+text, not the AI-rewritten one (there is no separate rewrite step in `avatar_jobs.py` to
+build a key from; the rewrite happens entirely inside `synthesize()`, same as `/api/tts`).
+This is a deliberate, not incidental, cost win: two jobs with identical raw
+text/dialect/voice fields are the same request as far as this cache is concerned, and a
+cache hit means `synthesize()` — and therefore the OpenAI rewrite call inside it — never
+runs at all for the second job. See `cache_key()`'s own docstring for the full reasoning.
+Folding in `model_repo_id` means a future model upgrade can never serve stale audio from a
+different model under the same key.
 
 Video output is **not cached** — it additionally depends on the portrait, emotion, and
 engine/model version, none of which repeats meaningfully across requests the way

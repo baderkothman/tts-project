@@ -48,7 +48,6 @@ from backend.app.data.dialects import DIALECT_BY_ID
 from backend.app.models.avatar import PROGRESS_BY_STATUS, TERMINAL_STATUSES, AvatarGenerationRequest, AvatarJobStatus
 from backend.app.models.tts import TTSRequest
 from backend.app.services import tts_cache
-from backend.app.services import dialect_rewriter
 from backend.app.services.avatar_engine import AvatarEngine, AvatarEngineError, AvatarOptions, EmotionConfig
 from backend.app.services.dialect_rewriter import DialectRewriteError
 from backend.app.services.inference import InferenceError
@@ -221,25 +220,7 @@ class AvatarJobManager:
                 return
 
             self._transition(job, "preprocessing")
-            # Same step the standalone /api/tts flow runs (dialect_rewriter.py):
-            # take the raw typed text, correct/diacritize it for the selected
-            # dialect (OpenAI, only when the request opted in), and use *that*
-            # processed text for the audio step below — not the raw input.
-            # Done here, once, before the TTSRequest is built (rather than
-            # via TTSRequest.ai_dialect_rewrite, which SpeechPipeline would
-            # otherwise apply internally) so the already-final text is what
-            # tts_cache.py hashes on — see its own docstring for why that
-            # matters. A DialectRewriteError here propagates to the
-            # `except (InferenceError, DialectRewriteError)` clause below,
-            # exactly like a TTS engine failure would.
-            working_text, rewrite_warnings = await dialect_rewriter.maybe_rewrite(
-                job.request.text,
-                dialect_id=job.request.dialect_id,
-                enabled=job.request.ai_dialect_rewrite,
-                gender=job.request.gender if job.request.mode == "voice_design" else None,
-            )
-            job.warnings.extend(rewrite_warnings)
-            tts_request = _build_tts_request(job.request, text=working_text)
+            tts_request = _build_tts_request(job.request)
 
             ref_audio_bytes = None
             ref_audio_file = job.job_dir / "ref_audio.bin"
@@ -356,10 +337,10 @@ class AvatarJobManager:
         return removed
 
 
-def _build_tts_request(req: AvatarGenerationRequest, *, text: str) -> TTSRequest:
+def _build_tts_request(req: AvatarGenerationRequest) -> TTSRequest:
     DIALECT_BY_ID[req.dialect_id]  # re-validated defensively; AvatarGenerationRequest already checked this
     return TTSRequest(
-        text=text,  # already dialect-rewritten/diacritized by _run_job above, not req.text verbatim
+        text=req.text,
         mode=req.mode,
         pipeline_mode="native",  # avatar audio always goes through the single-call path — see TTSRequest.pipeline_mode's docstring for what dual_model/transliteration are for; neither matters here
         dialect_id=req.dialect_id,
@@ -369,11 +350,6 @@ def _build_tts_request(req: AvatarGenerationRequest, *, text: str) -> TTSRequest
         speed=req.speed,
         quality=req.quality,
         guidance_scale=req.guidance_scale,
-        # False here, not req.ai_dialect_rewrite: the rewrite already
-        # happened once above, so SpeechPipeline.synthesize() must not do
-        # it again (a second OpenAI call, and a non-deterministic second
-        # rewrite of already-rewritten text).
-        ai_dialect_rewrite=False,
     )
 
 

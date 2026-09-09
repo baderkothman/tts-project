@@ -15,7 +15,7 @@ from PIL import Image
 
 from backend.app.api import avatar as avatar_module
 from backend.app.config import Settings
-from backend.app.services import avatar_jobs as avatar_jobs_module
+from backend.app.services import dialect_rewriter
 from backend.app.services import diacritizer, portrait_validator, text_preprocessor
 from backend.app.services.avatar_engines.fake_engine import FakeAvatarEngine
 from backend.app.services.avatar_jobs import AvatarJobManager
@@ -159,21 +159,23 @@ def test_cancel_a_queued_job(tmp_path, monkeypatch):
         assert body["status"] == "cancelled"
 
 
-def test_ai_dialect_rewrite_form_field_reaches_the_tts_engine(tmp_path, monkeypatch):
-    """End-to-end through the real HTTP form: the ai_dialect_rewrite=true
-    field actually changes what text the TTS engine receives, same
-    contract as /api/tts's own toggle — no real OpenAI call (rewrite() is
-    mocked), just proving the plumbing."""
+def test_dialect_rewrite_reaches_the_tts_engine_automatically_when_configured(tmp_path, monkeypatch):
+    """End-to-end through the real HTTP request, with no request field to
+    opt in at all: the rewrite is automatic whenever
+    dialect_rewriter.is_configured() is true — same contract as /api/tts's
+    own automatic behavior. No real OpenAI call (rewrite() is mocked), just
+    proving the plumbing."""
     monkeypatch.setattr(portrait_validator, "_detect_faces", lambda gray: [(100, 80, 200, 200)])
+    monkeypatch.setattr(dialect_rewriter, "is_configured", lambda: True)
 
     async def fake_rewrite(text, *, dialect_id, gender=None):
         return "نص بديل"
 
-    monkeypatch.setattr(avatar_jobs_module.dialect_rewriter, "rewrite", fake_rewrite)
+    monkeypatch.setattr(dialect_rewriter, "rewrite", fake_rewrite)
 
     tts_engine = FakeEngine()
     with make_client(tmp_path, tts_engine=tts_engine) as client:
-        job_id = _create_job(client, ai_dialect_rewrite="true").json()["job_id"]
+        job_id = _create_job(client).json()["job_id"]
 
         final = None
         for _ in range(200):
@@ -184,6 +186,26 @@ def test_ai_dialect_rewrite_form_field_reaches_the_tts_engine(tmp_path, monkeypa
         assert final is not None and final["status"] == "completed"
         assert any("rewritten for" in w.lower() for w in final["warnings"])
         assert tts_engine.calls[-1].text == "نص بديل"
+
+
+def test_dialect_rewrite_skipped_when_not_configured(tmp_path, monkeypatch):
+    # No monkeypatching of dialect_rewriter needed: the suite-wide
+    # conftest.py fixture already defaults is_configured() to False.
+    monkeypatch.setattr(portrait_validator, "_detect_faces", lambda gray: [(100, 80, 200, 200)])
+
+    tts_engine = FakeEngine()
+    with make_client(tmp_path, tts_engine=tts_engine) as client:
+        job_id = _create_job(client).json()["job_id"]
+
+        final = None
+        for _ in range(200):
+            body = client.get(f"/api/tts/avatar/jobs/{job_id}").json()
+            if body["status"] in ("completed", "failed", "cancelled"):
+                final = body
+                break
+        assert final is not None and final["status"] == "completed"
+        assert not any("rewritten for" in w.lower() for w in final["warnings"])
+        assert tts_engine.calls[-1].text == "مرحبا"  # _create_job's default text, untouched
 
 
 def test_emotions_endpoint_lists_the_closed_vocabulary(tmp_path):

@@ -102,5 +102,4 @@ export interface TTSRequestParams {
   quality: Quality;
   guidance_scale: number;
   ref_audio: File | null;
-  ai_dialect_rewrite: boolean;
 }

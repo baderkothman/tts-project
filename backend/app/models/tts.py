@@ -5,6 +5,15 @@
 the text fields) — it exists so validation and defaulting live in one place
 that both the API layer and the test suite can call directly, and so the
 service layer takes a single typed object instead of eight loose arguments.
+
+No `ai_dialect_rewrite` field here on purpose: the AI dialect rewrite step
+(`services/dialect_rewriter.py`) is no longer a per-request opt-in. It now
+runs automatically inside `SpeechPipeline.synthesize()`/`synthesize_stream()`,
+gated only on `dialect_rewriter.is_configured()` (i.e. whether
+`OPENAI_API_KEY` is set server-side) — never on anything the client sends,
+and never while the user is just typing (`/api/preprocess` below never calls
+it at all). See `dialect_rewriter.py`'s module docstring for the full
+rationale.
 """
 
 from __future__ import annotations
@@ -43,13 +52,6 @@ class TTSRequest(BaseModel):
     dialect_id: str = DEFAULT_DIALECT_ID
     gender: Gender | None = None
     pitch: Pitch = DEFAULT_PITCH
-
-    # Opt-in AI dialect rewrite (services/dialect_rewriter.py) — off by
-    # default. When true, the text is rewritten into `dialect_id`'s wording
-    # and diacritized by OpenAI before synthesis, instead of the user's
-    # literal input. Requires OPENAI_API_KEY server-side; see
-    # /api/model-info's `dialect_rewriter_configured`.
-    ai_dialect_rewrite: bool = False
 
     # clone mode — ref_audio itself travels as an UploadFile at the API
     # layer, not through this model; ref_text does not.
@@ -95,16 +97,18 @@ class SegmentInfo(BaseModel):
 
 
 class PreprocessRequest(BaseModel):
+    """The live "what will actually be spoken" preview, as the user types —
+    deliberately local-only. No AI dialect rewrite field here: that step
+    calls OpenAI (a real, metered API), so it only ever runs once, at actual
+    generation time (see `TTSRequest`'s module docstring) — never per
+    keystroke or per dialect selection. This preview can therefore
+    legitimately show slightly different wording than what ends up spoken;
+    `TTSResponse.processed_text` (returned from a real generation) is what's
+    authoritative for what was actually said."""
+
     text: str = Field(..., max_length=MAX_INPUT_CHARS_HARD_CAP)
     dialect_id: str = DEFAULT_DIALECT_ID
     pipeline_mode: PipelineMode = "native"
-    ai_dialect_rewrite: bool = False
-    # Only meaningful alongside ai_dialect_rewrite — see dialect_rewriter.py's
-    # module docstring for the speaker-gender-agreement it applies. `None`
-    # (the live preview's default, matching "auto"/clone mode) means no
-    # gender-agreement instruction is added; the text's own gender wording
-    # is left exactly as typed.
-    gender: Gender | None = None
 
     @field_validator("dialect_id")
     @classmethod
@@ -163,9 +167,11 @@ class ModelInfo(BaseModel):
     diacritizer_loaded: bool
     english_tts_loaded: bool
     # No load state to report (nothing loads at startup) — just whether
-    # OPENAI_API_KEY is set, so the frontend can grey out the AI dialect
-    # rewrite toggle with an honest reason instead of only failing at
-    # request time. See services/dialect_rewriter.is_configured().
+    # OPENAI_API_KEY is set server-side. Informational only: there is no
+    # per-request toggle to grey out anymore — when this is true, every
+    # /api/tts (and avatar) generation automatically gets the AI dialect
+    # rewrite step; when false, it's silently skipped. See
+    # services/dialect_rewriter.is_configured().
     dialect_rewriter_configured: bool
 
 

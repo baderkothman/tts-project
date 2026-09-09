@@ -33,17 +33,6 @@ def test_different_model_version_produces_a_different_key():
     assert a != b
 
 
-def test_ai_dialect_rewrite_flag_does_not_affect_the_key():
-    # By the time a TTSRequest reaches the cache, its .text is already the
-    # final text to speak — see cache_key's own docstring for why the flag
-    # itself is excluded.
-    a = tts_cache.cache_key(_request(), model_repo_id="repo-v1", ref_audio_bytes=None)
-    req = _request()
-    req = req.model_copy(update={"ai_dialect_rewrite": True})
-    b = tts_cache.cache_key(req, model_repo_id="repo-v1", ref_audio_bytes=None)
-    assert a == b
-
-
 def test_different_ref_audio_bytes_produce_different_keys():
     req = _request(mode="clone", ref_text="hi")
     a = tts_cache.cache_key(req, model_repo_id="repo-v1", ref_audio_bytes=b"clip-one")

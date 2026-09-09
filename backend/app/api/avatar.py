@@ -93,7 +93,6 @@ async def create_avatar_job(
     quality: str = Form("high"),
     guidance_scale: float = Form(2.0),
     emotion: str = Form(DEFAULT_EMOTION),
-    ai_dialect_rewrite: bool = Form(False),
     portrait: UploadFile = File(...),
     ref_audio: UploadFile | None = File(None),
 ) -> AvatarJobCreateResponse:
@@ -112,7 +111,6 @@ async def create_avatar_job(
             quality=quality,  # type: ignore[arg-type]
             guidance_scale=guidance_scale,
             emotion=emotion,  # type: ignore[arg-type]
-            ai_dialect_rewrite=ai_dialect_rewrite,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

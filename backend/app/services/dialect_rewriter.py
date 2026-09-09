@@ -1,11 +1,22 @@
-"""Optional AI dialect rewrite step — OpenAI, opt-in per request.
+"""Optional AI dialect rewrite step — OpenAI, automatic whenever configured.
 
 Everywhere else in this app, `dialect_id` only *steers* pronunciation (the
 TTS model's `language` parameter) or diacritizes whatever Arabic the user
 already typed (`diacritizer.py`). Neither actually rewrites an MSA-ish
 sentence into another dialect's vocabulary/phrasing — that gap is what this
-module fills, and only when a request explicitly asks for it
-(`TTSRequest.ai_dialect_rewrite` / `PreprocessRequest.ai_dialect_rewrite`).
+module fills.
+
+Not a per-request opt-in (there used to be a `TTSRequest.ai_dialect_rewrite`
+/ `AvatarGenerationRequest.ai_dialect_rewrite` toggle; both were removed).
+It now runs automatically, gated only on `is_configured()` (whether
+`OPENAI_API_KEY` is set server-side) — every `/api/tts`, `/api/tts/stream`,
+and avatar generation call gets it for free when the key is set, and it's
+silently skipped when it isn't. The one place it deliberately never runs is
+`/api/preprocess` (the live "what will be spoken" preview as the user
+types/picks a dialect) — see that endpoint's own docstring: calling a paid
+external API on every keystroke or dialect change would be real,
+unnecessary cost, so the rewrite is scoped to actual generation requests
+only, triggered once per "generate" click, not per input change.
 
 The same call also handles speaker-gender agreement when the request's
 voice `gender` is set (`voice_design` mode only — `None`/auto and `clone`
@@ -177,9 +188,12 @@ _MAX_OUTPUT_RATIO = 4
 
 
 def is_configured() -> bool:
-    """No network call — just whether the optional credential is set.
-    Used by `/api/model-info` so the frontend can grey out the toggle with
-    an honest reason instead of only failing at request time."""
+    """No network call — just whether the optional credential is set. This
+    is the *only* gate on whether the automatic rewrite runs (see module
+    docstring) — `speech_pipeline.py` and `avatar_jobs.py` both call this
+    directly as `maybe_rewrite()`'s `enabled` argument. Also surfaced via
+    `/api/model-info` (`dialect_rewriter_configured`) so callers can tell,
+    informationally, whether a given deployment will apply it."""
     return bool(get_settings().openai_api_key)
 
 

@@ -64,7 +64,7 @@ don't fully control access to.
 
 Unset (the default), the app falls back to `StubAvatarEngine` automatically — no error,
 no missing feature, just the free procedural placeholder instead of real AI lip sync,
-exactly like `OPENAI_API_KEY` being unset only disables the AI dialect rewrite toggle
+exactly like `OPENAI_API_KEY` being unset only skips the automatic AI dialect rewrite step
 rather than breaking anything else.
 
 ## Running it

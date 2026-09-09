@@ -31,15 +31,7 @@ const PITCH_LABELS: Record<Pitch, string> = {
 // server shows up here without a frontend deploy.
 const FALLBACK_EMOTIONS: EmotionName[] = ["neutral", "happy", "sad", "excited", "calm", "professional"];
 
-export function AvatarStudioPanel({
-  dialects,
-  modelReady,
-  aiRewriteAvailable,
-}: {
-  dialects: Dialect[];
-  modelReady: boolean;
-  aiRewriteAvailable: boolean;
-}) {
+export function AvatarStudioPanel({ dialects, modelReady }: { dialects: Dialect[]; modelReady: boolean }) {
   const [text, setText] = useState("");
   const [dialectId, setDialectId] = useState("msa");
   const [gender, setGender] = useState<Gender | null>("female");
@@ -47,7 +39,6 @@ export function AvatarStudioPanel({
   const [emotion, setEmotion] = useState<EmotionName>("neutral");
   const [portrait, setPortrait] = useState<File | null>(null);
   const [emotions, setEmotions] = useState<EmotionName[]>(FALLBACK_EMOTIONS);
-  const [aiDialectRewrite, setAiDialectRewrite] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const { job, creating, error, create, cancel, reset } = useAvatarJob();
@@ -70,7 +61,7 @@ export function AvatarStudioPanel({
       return;
     }
     setFormError(null);
-    void create({ text, dialectId, gender, pitch, emotion, portrait, aiDialectRewrite });
+    void create({ text, dialectId, gender, pitch, emotion, portrait });
   }
 
   return (
@@ -152,28 +143,6 @@ export function AvatarStudioPanel({
               </button>
             ))}
           </div>
-
-          <label
-            className="checkbox-row"
-            title={aiRewriteAvailable ? undefined : "يتطلب إعداد OPENAI_API_KEY على الخادم"}
-          >
-            <input
-              type="checkbox"
-              checked={aiDialectRewrite}
-              disabled={!aiRewriteAvailable || busy}
-              onChange={(e) => setAiDialectRewrite(e.target.checked)}
-            />
-            إعادة صياغة باللهجة عبر OpenAI (تشكيل تلقائي)
-          </label>
-          {aiDialectRewrite && aiRewriteAvailable && (
-            <p className="field__hint">
-              سيُرسل النص المكتوب إلى OpenAI لإعادة صياغته وتشكيله حسب اللهجة المختارة قبل توليد
-              الصوت والفيديو.
-            </p>
-          )}
-          {!aiRewriteAvailable && (
-            <p className="field__hint">غير متاحة على هذا الخادم — يتطلب إعداد OPENAI_API_KEY.</p>
-          )}
         </div>
 
         <div className="field">

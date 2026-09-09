@@ -126,25 +126,19 @@ async def preprocess(body: PreprocessRequest) -> PreprocessResponse:
     call beyond the (cached) diacritizer, so the UI can show this live as
     the user types without waiting on a full generation.
 
-    When `ai_dialect_rewrite` is set, this also calls OpenAI (see
-    `dialect_rewriter.py`) before previewing — so the live preview matches
-    what `/api/tts` will actually speak, at the cost of one OpenAI call per
-    debounced keystroke pause while the toggle is on."""
-    try:
-        working_text, rewrite_warnings = await dialect_rewriter.maybe_rewrite(
-            body.text, dialect_id=body.dialect_id, enabled=body.ai_dialect_rewrite, gender=body.gender
-        )
-    except DialectRewriteError as exc:
-        raise HTTPException(status_code=_ERROR_STATUS[exc.kind], detail=exc.message) from exc
-
+    Deliberately **never** calls the AI dialect rewrite step (OpenAI) — see
+    `PreprocessRequest`'s own docstring. That step now runs exactly once,
+    automatically, inside `/api/tts` itself (`SpeechPipeline.synthesize()`),
+    specifically so typing or changing the dialect selection never triggers
+    a paid API call — only clicking "generate" does."""
     result = text_preprocessor.preprocess(
-        working_text, dialect_id=body.dialect_id, pipeline_mode=body.pipeline_mode
+        body.text, dialect_id=body.dialect_id, pipeline_mode=body.pipeline_mode
     )
     return PreprocessResponse(
         original_text=result.original_text,
         processed_text=result.processed_text,
         segments=_segment_infos(result.segments),
-        warnings=rewrite_warnings + result.warnings,
+        warnings=result.warnings,
     )
 
 
@@ -161,7 +155,6 @@ async def _build_request(
     quality: str,
     guidance_scale: float,
     ref_audio: UploadFile | None,
-    ai_dialect_rewrite: bool = False,
 ) -> tuple[TTSRequest, bytes | None]:
     """Shared by `/tts` and `/tts/stream`: build+validate the typed request
     and read/validate the optional reference-audio upload. Kept as one
@@ -179,7 +172,6 @@ async def _build_request(
             speed=speed,
             quality=quality,  # type: ignore[arg-type]
             guidance_scale=guidance_scale,
-            ai_dialect_rewrite=ai_dialect_rewrite,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -220,7 +212,6 @@ async def synthesize(
     quality: str = Form("high"),
     guidance_scale: float = Form(2.0),
     ref_audio: UploadFile | None = File(None),
-    ai_dialect_rewrite: bool = Form(False),
 ) -> TTSResponse:
     pipeline = request.app.state.pipeline
     tts_request, ref_audio_bytes = await _build_request(
@@ -235,7 +226,6 @@ async def synthesize(
         quality=quality,
         guidance_scale=guidance_scale,
         ref_audio=ref_audio,
-        ai_dialect_rewrite=ai_dialect_rewrite,
     )
 
     t0_generation = time.perf_counter()
@@ -339,7 +329,6 @@ async def synthesize_stream(
     quality: str = Form("high"),
     guidance_scale: float = Form(2.0),
     ref_audio: UploadFile | None = File(None),
-    ai_dialect_rewrite: bool = Form(False),
 ) -> StreamingResponse:
     """Sentence-chunked variant of `/tts` — same request shape, but returns
     audio as Server-Sent Events, one `chunk` per sentence, so a client (or
@@ -360,7 +349,6 @@ async def synthesize_stream(
         quality=quality,
         guidance_scale=guidance_scale,
         ref_audio=ref_audio,
-        ai_dialect_rewrite=ai_dialect_rewrite,
     )
     return StreamingResponse(
         _stream_events(pipeline, tts_request, ref_audio_bytes),
