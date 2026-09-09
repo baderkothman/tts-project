@@ -13,14 +13,22 @@
   --surface-raised: #fffdf7;
   --ink: #262019;
   --ink-soft: #6b6154;
-  --ink-faint: #9b917f;
+  /* #9b917f measured 2.5:1 on --paper — well under WCAG AA's 4.5:1 floor
+     for the small (≤13px) hint/warning/footer text it's actually used for.
+     Darkened to the least change that clears 4.5:1 (measured directly, not
+     eyeballed); it now reads close to --ink-soft rather than as a clearly
+     lighter third tier, but legible beats subtly-graded. */
+  --ink-faint: #6f6656;
   --line: #d9d0bc;
   --line-strong: #c3b89e;
 
   --teal: #1f5e5b;
   --teal-deep: #163f3d;
   --teal-soft: #d9e8e5;
-  --brass: #b8863b;
+  /* #b8863b measured 2.6:1 on --paper — the same AA failure as --ink-faint
+     above, and this one carries actual warning text (.preview__warnings,
+     .player__warnings), not just hints. Darkened to clear 4.5:1. */
+  --brass: #84602a;
   --brass-soft: #f0e2c4;
   --clay: #a8402f;
   --clay-soft: #f3ded9;

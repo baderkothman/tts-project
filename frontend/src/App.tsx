@@ -226,13 +226,17 @@ export default function App() {
         <Header health={health} />
 
         <main className="composer-card">
-          {/* DOM order = visual order in this RTL layout: نص (right) -> صوت (middle) -> إعدادات (left) */}
-          <section className="composer-col composer-col--text">
+          {/* DOM order = visual order in this RTL layout: مساحة العمل (right) -> إعدادات (left).
+              Text, its live preview, the generate action, and the result all
+              live in one column — they're one continuous task (write, see
+              what will be spoken, act, listen), not three unrelated panels;
+              a separate "audio" column here used to sit mostly empty until
+              generation finished, and still had a lot of dead space below
+              the player even after. */}
+          <section className="composer-col composer-col--workspace">
             <TextComposer value={text} onChange={setText} />
             <PreprocessPreview preview={preview} loading={previewLoading} />
-          </section>
 
-          <section className="composer-col composer-col--audio">
             {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
             <div className="actions">

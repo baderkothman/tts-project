@@ -94,17 +94,25 @@
 
 /* ---------- composer card ---------- */
 
-/* Three columns: text (right), generated audio (middle), settings (left).
-   The page is `dir="rtl"` (frontend/index.html), so grid auto-placement
-   already lays these out right-to-left in source order — no explicit
-   grid-column/order needed to get text-column on the right. */
+/* Two columns: the workspace (right — text, its live preview, the generate
+   action, and the result player, all one continuous task) and settings
+   (left — dialect and voice design, which the person visits, sets, and
+   mostly leaves alone). The page is `dir="rtl"` (frontend/index.html), so
+   grid auto-placement already lays these out right-to-left in source order
+   — no explicit grid-column/order needed to get the workspace on the right.
+   An earlier three-column version split text and its own result/player into
+   separate columns; the result column sat empty until generation finished
+   and still had a lot of unused height below the player afterward, since
+   nothing in a settings-sized column's worth of controls needed that much
+   vertical room. Two columns removes that dead space by putting the result
+   where it belongs, right under the text that produced it. */
 .composer-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 24px;
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 3fr 2fr;
   align-items: stretch; /* equal-height columns so the divider between them runs edge to edge */
   gap: 0;
   box-shadow: var(--shadow-sm);
