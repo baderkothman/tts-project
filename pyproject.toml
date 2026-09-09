@@ -27,6 +27,35 @@ dependencies = [
     # exercised when OPENAI_API_KEY is set and a request opts in; the rest
     # of the app has no dependency on it.
     "openai>=2.0",
+    # Talking Avatar feature (services/portrait_validator.py) — face
+    # detection for portrait upload validation only, via OpenCV's bundled
+    # Haar cascade (no separate model download). `-headless` specifically:
+    # this is a server, no GUI/X11 bindings needed, and the plain
+    # `opencv-python` package would pull those in for nothing.
+    #
+    # Pinned below 5.0 deliberately, confirmed by direct install-and-check
+    # in this environment: opencv-python-headless 5.0.0 ships an EMPTY
+    # `cv2/data/` directory (verified — `cv2.data.haarcascades` resolves to
+    # a real path, but `haarcascade_frontalface_default.xml` is not in it),
+    # while 4.14.0 still bundles every cascade file exactly as historically
+    # documented. `_detect_faces()` in portrait_validator.py would raise
+    # `cv2.error: (-2:Unspecified error)` at first request, not at import
+    # time, on the newer major version — worth pinning against rather than
+    # discovering live.
+    "opencv-python-headless>=4.10,<5",
+    # Video encoding (services/avatar_engines/stub_engine.py) shells out to
+    # the `ffmpeg` binary directly (subprocess, no shell interpolation) —
+    # not a pip package. Install separately: `brew install ffmpeg` (macOS) /
+    # `apt install ffmpeg` (Debian/Ubuntu) / already added to Dockerfile.
+    #
+    # The real GPU-backed avatar engine (services/avatar_engines/replicate_engine.py)
+    # calls Replicate's REST API directly — async, so this is the same `httpx`
+    # already listed under [dev] for the test suite's `TestClient`, promoted
+    # to a real runtime dependency now that production code imports it too
+    # (it was already present transitively via `openai`'s own dependency on
+    # it, but that's not something this app's own imports should rely on
+    # staying true across an unrelated package's version bumps).
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]

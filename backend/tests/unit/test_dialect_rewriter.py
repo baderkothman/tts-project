@@ -170,6 +170,47 @@ async def test_rewrite_rejects_multi_line_output_from_the_api(monkeypatch):
     assert exc_info.value.kind == "invalid_input"
 
 
+def test_prompt_forbids_offering_multiple_variants():
+    # The actual root cause of the hedge failure mode above: nothing in an
+    # earlier version of this prompt told the model not to hedge with two
+    # phrasings, only that its final answer should be free of explanation/
+    # quotes. Real, reproduced multi-variant responses in production traffic
+    # led to this explicit instruction being added.
+    system_content = dialect_rewriter._SYSTEM_PROMPT.format(
+        name_en="Egyptian", name_ar="مصرية", gender_clause=""
+    )
+    assert "exactly one" in system_content
+    assert "variant" in system_content
+
+
+async def test_rewrite_retries_past_a_single_hedge_and_succeeds(monkeypatch):
+    # Real observed pattern: the model hedges once, then gives one clean
+    # sentence on a second try. Bumped from one retry to two (2026-09)
+    # specifically because a single retry wasn't always enough headroom.
+    monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
+    fake_client = _FakeClient(
+        results=["تقدر تساعدني؟\nتَقْدَرْ تُساعِدْنِي؟", "تِقْدَر تِساعِدْني؟"]
+    )
+    monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
+
+    result = await dialect_rewriter.rewrite("تقدر تساعدني؟", dialect_id="egyptian")
+    assert result == "تِقْدَر تِساعِدْني؟"
+    assert len(fake_client.responses.calls) == 2
+
+
+async def test_rewrite_gives_up_after_exhausting_all_hedge_retries(monkeypatch):
+    # Persistent hedging on every attempt still surfaces as a real,
+    # retryable-by-the-user error rather than looping forever or guessing.
+    monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
+    fake_client = _FakeClient(result="تقدر تساعدني؟\nتَقْدَرْ تُساعِدْنِي؟")
+    monkeypatch.setattr(dialect_rewriter, "_client", lambda: fake_client)
+
+    with pytest.raises(dialect_rewriter.DialectRewriteError) as exc_info:
+        await dialect_rewriter.rewrite("تقدر تساعدني؟", dialect_id="egyptian")
+    assert exc_info.value.kind == "invalid_input"
+    assert len(fake_client.responses.calls) == 3
+
+
 async def test_rewrite_strips_stray_control_characters_from_the_api(monkeypatch):
     monkeypatch.setattr(dialect_rewriter, "get_settings", _settings)
     fake_client = _FakeClient(result="تِقْدَر تِساعِدْني؟\x0f")

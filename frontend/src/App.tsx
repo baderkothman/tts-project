@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, base64ToArrayBuffer, getDialects, getHealth, getModelInfo, synthesizeSpeech } from "./api/client";
 import { AudioPlayer } from "./components/AudioPlayer";
+import { useAvatarController } from "./components/avatar/useAvatarController";
+import { AvatarStudioPanel } from "./components/avatar-studio/AvatarStudioPanel";
 import { DialectRail } from "./components/DialectRail";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { GenerationControls } from "./components/GenerationControls";
@@ -45,7 +47,10 @@ function translateError(message: string): string {
   return message;
 }
 
+type AppTab = "tts" | "avatar";
+
 export default function App() {
+  const [activeTab, setActiveTab] = useState<AppTab>("tts");
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [dialects, setDialects] = useState<Dialect[]>([]);
 
@@ -123,6 +128,17 @@ export default function App() {
     mode === "voice_design" ? gender : null,
   );
   const { state: streamState, start: startStream, stop: stopStream } = useStreamingSynthesis();
+
+  const avatarState = useAvatarController({
+    connected: health !== null,
+    hasError: health?.status === "error" || error !== null,
+    modelLoading: health?.status === "loading",
+    generating: loading,
+    streamingActive: streamState.active,
+    // audioUrl is a fresh blob: URL per successful generation (or null before
+    // the first one / after reset), so it doubles as a "new result" token.
+    resultToken: audioUrl,
+  });
 
   const buildTtsParams = useCallback(
     (): TTSRequestParams => ({
@@ -223,8 +239,36 @@ export default function App() {
   return (
     <div className="page">
       <div className="page__container">
-        <Header health={health} />
+        <Header health={health} avatarState={avatarState} />
 
+        <nav className="mode-tabs" role="tablist" aria-label="وضع الاستخدام">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "tts"}
+            className={`mode-tabs__option${activeTab === "tts" ? " mode-tabs__option--active" : ""}`}
+            onClick={() => setActiveTab("tts")}
+          >
+            توليد الصوت
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "avatar"}
+            className={`mode-tabs__option${activeTab === "avatar" ? " mode-tabs__option--active" : ""}`}
+            onClick={() => setActiveTab("avatar")}
+          >
+            الصورة الناطقة
+          </button>
+        </nav>
+
+        {activeTab === "avatar" ? (
+          <AvatarStudioPanel
+            dialects={dialects.length ? dialects : FALLBACK_DIALECTS}
+            modelReady={modelReady}
+            aiRewriteAvailable={aiRewriteAvailable}
+          />
+        ) : (
         <main className="composer-card">
           {/* DOM order = visual order in this RTL layout: مساحة العمل (right) -> إعدادات (left).
               Text, its live preview, the generate action, and the result all
@@ -303,6 +347,7 @@ export default function App() {
             />
           </section>
         </main>
+        )}
 
         <footer className="page__footer">
           <p>

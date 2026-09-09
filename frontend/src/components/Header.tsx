@@ -1,3 +1,5 @@
+import { BayanAvatar } from "./avatar/BayanAvatar";
+import type { AvatarState } from "./avatar/types";
 import type { HealthResponse } from "../types/api";
 
 const DEVICE_LABEL: Record<string, string> = {
@@ -6,7 +8,7 @@ const DEVICE_LABEL: Record<string, string> = {
   cpu: "CPU",
 };
 
-export function Header({ health }: { health: HealthResponse | null }) {
+export function Header({ health, avatarState }: { health: HealthResponse | null; avatarState: AvatarState }) {
   return (
     <header className="site-header">
       <div className="site-header__identity">
@@ -28,7 +30,12 @@ export function Header({ health }: { health: HealthResponse | null }) {
         </div>
       </div>
 
-      <StatusPill health={health} />
+      <div className="site-header__status">
+        {/* Bayan — decorative echo of the status text beside it, not a
+            replacement for it (see BayanAvatar's `label` prop doc). */}
+        <BayanAvatar state={avatarState} size={44} />
+        <StatusPill health={health} />
+      </div>
     </header>
   );
 }

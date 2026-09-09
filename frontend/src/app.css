@@ -52,6 +52,12 @@
   color: var(--ink-soft);
 }
 
+.site-header__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -796,6 +802,145 @@
   padding-inline-start: 18px;
   font-size: 0.8rem;
   color: var(--brass);
+}
+
+/* ---------- mode tabs (TTS vs Talking Avatar) ---------- */
+
+.mode-tabs {
+  display: inline-flex;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 3px;
+  width: fit-content;
+  background: var(--surface-raised);
+}
+
+.mode-tabs__option {
+  border: none;
+  background: transparent;
+  padding: 8px 20px;
+  border-radius: var(--radius-pill);
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.mode-tabs__option--active {
+  background: var(--teal);
+  color: var(--surface-raised);
+  font-weight: 600;
+}
+
+/* ---------- portrait upload (Talking Avatar) ---------- */
+
+.dropzone--portrait {
+  padding: 16px;
+}
+
+.dropzone__portrait-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.dropzone__portrait-preview img {
+  max-height: 180px;
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- avatar job progress ---------- */
+
+.avatar-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.avatar-progress__title {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+
+.avatar-progress__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.avatar-progress__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+
+.avatar-progress__step--done {
+  color: var(--ink-soft);
+}
+
+.avatar-progress__step--active {
+  color: var(--teal-deep);
+  font-weight: 600;
+}
+
+.avatar-progress__marker {
+  width: 1.2em;
+  text-align: center;
+}
+
+.avatar-progress__bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.avatar-progress__bar-fill {
+  height: 100%;
+  background: var(--teal);
+  transition: width 0.3s ease;
+}
+
+.avatar-progress__percent {
+  align-self: flex-end;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+
+/* ---------- avatar result ---------- */
+
+.avatar-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.avatar-result__video {
+  width: 100%;
+  max-height: 480px;
+  border-radius: var(--radius-md);
+  background: #000;
+  box-shadow: var(--shadow-md);
+}
+
+.avatar-result__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
 }
 
 /* ---------- footer ---------- */

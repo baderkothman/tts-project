@@ -17,6 +17,11 @@ node_modules/
 # Downloaded model weights (oddadmix/lahgtna-omnivoice-v2, ~2.4GB) — never committed
 .hf_cache/
 
+# Talking Avatar job artifacts (portraits, generated audio/video, TTS cache) — ephemeral
+# scratch space swept automatically (see docs/AVATAR_ARCHITECTURE.md's "Storage lifecycle"),
+# never meant to be committed or persisted across a redeploy.
+.avatar_jobs/
+
 # Generated audio — not persisted by default, except durable evidence saved
 # deliberately under docs/audio/ (docs/TTS_MODEL_EVALUATION.md, docs/SAMPLE_GALLERY.md).
 # `!dir/*.ext` isn't recursive, so docs/audio/samples/ needs its own line too.

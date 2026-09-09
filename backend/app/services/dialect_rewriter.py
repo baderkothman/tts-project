@@ -77,9 +77,12 @@ below runs exactly that. An earlier version of this behavior instead raised
 an error and left `rewrite()` to retry the whole API call once before
 giving up, which meant a persistent case (the model reliably mis-handling
 one particular word) surfaced as a visible failure to the user instead of
-getting fixed. `rewrite()` still retries once for the one failure mode that
-genuinely has no local fix — the model hedging with two stacked sentence
-variants (see failure mode 2 above).
+getting fixed. `rewrite()` still retries (twice, as of 2026-09) for the one
+failure mode that genuinely has no local fix — the model hedging with two
+stacked sentence variants (see failure mode 2 above). The system prompt now
+also explicitly forbids offering more than one variant in the first place;
+the retries are a safety net on top of that instruction, not a replacement
+for it.
 """
 
 from __future__ import annotations
@@ -144,8 +147,12 @@ _SYSTEM_PROMPT = (
     "If the target is Modern Standard Arabic itself, keep the wording formal (a "
     "near-identity rewrite) and use standard MSA diacritics including case endings. "
     "{gender_clause}"
-    "Respond with only the rewritten, diacritized Arabic text — no explanation, "
-    "no quotes, nothing else."
+    "Give exactly one rewritten sentence. Never offer more than one phrasing, option, "
+    "or variant, and never present a fallback alongside a preferred version — if more "
+    "than one wording would sound natural, silently choose the single best one "
+    "yourself and commit to it. "
+    "Respond with only that one rewritten, diacritized Arabic text — no explanation, "
+    "no quotes, no alternate versions, nothing else."
 )
 
 # Only inserted when the request has an explicit voice gender (voice_design
@@ -245,17 +252,24 @@ async def rewrite(text: str, *, dialect_id: str, gender: str | None = None) -> s
         parsed = response.output_parsed
         return parsed.dialect_text if parsed else ""
 
-    # Up to two attempts total, but the retry only fires for a
+    # Up to three attempts total, but the retry only fires for a
     # content-quality problem (empty output, a multi-line hedge, or a word
     # left completely bare of diacritics) — a sporadic generation glitch
-    # worth one more try, not a systematic failure. Transport-level
+    # worth trying again, not a systematic failure. Transport-level
     # failures (`upstream_error`, raised inside `_call` above) are never
     # retried here: the OpenAI client already retries those itself
-    # (`max_retries=2` on the client in `_client()`), and a second attempt
-    # after a timeout would just double the wait for something not caused
+    # (`max_retries=2` on the client in `_client()`), and a further attempt
+    # after a timeout would just multiply the wait for something not caused
     # by the response content at all.
+    #
+    # Bumped from two attempts to three (2026-09) after the multi-line-hedge
+    # failure mode was observed twice back to back in real use — one retry
+    # wasn't enough headroom on its own. The real fix is the system prompt
+    # now explicitly forbidding multiple variants (see _SYSTEM_PROMPT); this
+    # extra attempt is defense in depth on top of that, not a substitute for
+    # it — it only costs latency on the failure path, never the common case.
     last_error: DialectRewriteError | None = None
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             result = _sanitize(await _call(), dialect_id=dialect_id)
         except DialectRewriteError as exc:

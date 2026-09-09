@@ -23,14 +23,32 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.app.api import tts
+from backend.app.api import avatar, tts
 from backend.app.config import get_settings
 from backend.app.services import diacritizer, english_tts
+from backend.app.services.avatar_engine import AvatarEngine
+from backend.app.services.avatar_engines.replicate_engine import ReplicateAvatarEngine
+from backend.app.services.avatar_engines.stub_engine import StubAvatarEngine
+from backend.app.services.avatar_jobs import AvatarJobManager
 from backend.app.services.inference import TTSEngine
 from backend.app.services.speech_pipeline import SpeechPipeline
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("lahgtna.main")
+
+
+def _select_avatar_engine(settings) -> AvatarEngine:
+    """Same "optional credential, honest fallback" shape
+    `dialect_rewriter.is_configured()` uses for `OPENAI_API_KEY`: real AI
+    lip sync (`ReplicateAvatarEngine`, see its module docstring) when
+    `REPLICATE_API_TOKEN` is set, the free procedural placeholder
+    (`StubAvatarEngine`) otherwise — never a hard failure to start the app
+    over a missing optional, metered credential."""
+    if settings.replicate_api_token:
+        logger.info("Talking Avatar: using ReplicateAvatarEngine (real AI lip sync)")
+        return ReplicateAvatarEngine(settings.replicate_api_token)
+    logger.info("Talking Avatar: REPLICATE_API_TOKEN not set — using StubAvatarEngine (procedural placeholder)")
+    return StubAvatarEngine()
 
 
 @asynccontextmanager
@@ -52,6 +70,15 @@ async def lifespan(app: FastAPI):
     engine = TTSEngine(settings)
     app.state.engine = engine
     app.state.pipeline = SpeechPipeline(engine)
+
+    # Talking Avatar job manager — see services/avatar_jobs.py's module
+    # docstring for why this is in-process rather than Celery/Redis.
+    # Started/stopped explicitly (not just constructed) so its background
+    # worker/cleanup tasks are cancelled cleanly on shutdown rather than
+    # left dangling.
+    avatar_jobs = AvatarJobManager(pipeline=app.state.pipeline, engine=_select_avatar_engine(settings), settings=settings)
+    avatar_jobs.start()
+    app.state.avatar_jobs = avatar_jobs
 
     async def _load_arabic() -> None:
         try:
@@ -78,6 +105,7 @@ async def lifespan(app: FastAPI):
     finally:
         for task in tasks:
             task.cancel()
+        await avatar_jobs.stop()
 
 
 app = FastAPI(
@@ -98,6 +126,7 @@ app.add_middleware(
 )
 
 app.include_router(tts.router)
+app.include_router(avatar.router)
 
 _FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if _FRONTEND_DIST.exists():

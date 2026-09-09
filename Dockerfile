@@ -22,9 +22,15 @@ FROM python:3.12-slim AS runtime
 # espeak-ng: Kokoro's phonemizer + the transliteration fallback
 # (services/english_tts.py, services/transliterator.py).
 # libsndfile1: soundfile's runtime dependency (services/audio.py).
+# ffmpeg: the Talking Avatar feature's video encoding
+# (services/avatar_engines/stub_engine.py shells out to it directly — see
+# docs/AVATAR_SETUP.md). Face detection for portrait validation needs no
+# separate system package — it's bundled inside the pinned
+# opencv-python-headless<5 wheel (see pyproject.toml's comment on that pin).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       espeak-ng \
       libsndfile1 \
+      ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

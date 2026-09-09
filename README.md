@@ -235,6 +235,29 @@ any code: add an entry to `backend/app/data/pronunciation_overrides.json`
 (`{"term": "Arabic-script pronunciation"}`) — it's applied before segmentation, so the term
 is simply spoken as Arabic from then on.
 
+## Talking Avatar (experimental)
+
+A second feature, built on top of the TTS pipeline above without modifying it: upload a
+portrait, type Arabic text, pick a dialect/voice/emotion, and get back an MP4 of the
+portrait animated to the generated speech. Real end to end — real Lahgtna-generated
+audio, a real generated video, an async job API with live progress
+(`GET /api/tts/avatar/jobs/{id}/events`, Server-Sent Events) instead of one long-held HTTP
+request.
+
+**Real AI lip sync is active by default when `REPLICATE_API_TOKEN` is set** — SadTalker,
+run via [Replicate](https://replicate.com)'s hosted API (`ReplicateAvatarEngine`; every
+open-source lip-sync model evaluated needs CUDA, which this repo's dev/deploy hardware
+doesn't have — see the evaluation doc). Real, metered cost per generation
+(~$0.09–0.15, confirmed against actual billed predictions), so it's opt-in via that one
+credential. Unset, the app falls back automatically to `StubAvatarEngine` — a free,
+non-AI placeholder (audio-reactive idle motion, no real lip sync) so the feature still
+works end to end with zero cost and zero external dependency. See:
+
+- `docs/AVATAR_MODEL_EVALUATION.md` — the model comparison and why
+- `docs/AVATAR_ARCHITECTURE.md` — the `AvatarEngine` abstraction, job state machine,
+  storage/caching/security, and the concrete plan for a real GPU-backed engine later
+- `docs/AVATAR_SETUP.md` — running it (one extra system dependency: `ffmpeg`)
+
 ## API
 
 ```text
@@ -251,6 +274,19 @@ POST /api/tts           multipart/form-data: text + mode + pipeline_mode + diale
 POST /api/tts/stream    same request shape as /api/tts -> Server-Sent Events, one `chunk` per
                          sentence as its audio is ready, then a `done` event with real measured
                          time-to-first-audio (`ttfa_ms`) — see "Streaming and latency" below
+
+GET  /api/tts/avatar/emotions           the 6 real emotion presets — see "Talking Avatar" above
+POST /api/tts/avatar                    multipart/form-data: text + dialect/voice options +
+                                          emotion + ai_dialect_rewrite + portrait image ->
+                                          202 + {job_id}
+GET  /api/tts/avatar/jobs/{id}          job status/progress + video_url/audio_url once ready
+GET  /api/tts/avatar/jobs/{id}/events   Server-Sent Events progress stream (terminates on
+                                          completed/failed/cancelled)
+POST /api/tts/avatar/jobs/{id}/cancel   cancels a queued job outright; a running job's result
+                                          is discarded once its current stage finishes (see
+                                          docs/AVATAR_ARCHITECTURE.md's "Cancellation" section)
+GET  /api/tts/avatar/jobs/{id}/video    the generated MP4
+GET  /api/tts/avatar/jobs/{id}/audio    the generated WAV (same audio muxed into the video)
 ```
 
 ## Streaming and latency
@@ -292,6 +328,9 @@ web app" reasoning in more depth.
 
 ```bash
 brew install espeak-ng   # or: apt install espeak-ng — needed by Kokoro + the transliteration fallback
+brew install ffmpeg      # or: apt install ffmpeg — needed by the Talking Avatar feature only
+                          # (see "Talking Avatar" above / docs/AVATAR_SETUP.md); everything else
+                          # in this app works without it
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -e ".[dev]"
 cp .env.example .env   # optional — no credentials required, except OPENAI_API_KEY for the
@@ -323,9 +362,10 @@ FastAPI process at `/`, and `npm run dev` is then unnecessary.
 ## Tests
 
 ```bash
-.venv/bin/pytest backend/tests -v -m "not integration"   # offline, no model weights: 117 pass
+.venv/bin/pytest backend/tests -v -m "not integration"   # offline, no model weights: 194 pass
+.venv/bin/pytest backend/tests                              # + the real-ffmpeg avatar test: 197 pass
 RUN_MODEL_INTEGRATION_TESTS=1 .venv/bin/pytest backend/tests/integration -v -m integration
-                                                            # real weights, real MPS inference: 6 pass
+                                                            # + real Lahgtna weights, real MPS inference
 
 npm run test    # root — same offline suite via turbo, cached on unchanged inputs (turbo run test)
 npm run build   # root — frontend's tsc+vite build; backend has no build step, turbo skips it
@@ -375,8 +415,10 @@ model download) and skips itself if the system library isn't installed.
 package.json / turbo.json   # root Turborepo config — see "Run" above
 backend/package.json        # task-runner shim only (dev/test) — no build/lint script, no JS code
 backend/app/
-├── api/tts.py               # /api/health, /api/model-info, /api/dialects, /api/voices,
-│                             # /api/preprocess, /api/tts
+├── api/
+│   ├── tts.py                # /api/health, /api/model-info, /api/dialects, /api/voices,
+│   │                          # /api/preprocess, /api/tts
+│   └── avatar.py              # /api/tts/avatar and the job endpoints — see "Talking Avatar" above
 ├── services/
 │   ├── inference.py          # TTSEngine — the one OmniVoice (Arabic) instance, loaded once
 │   ├── english_tts.py         # Kokoro-82M wrapper, for dual_model mode
@@ -391,29 +433,51 @@ backend/app/
 │   ├── speech_pipeline.py     # orchestrates text_preprocessor + engines into final audio,
 │   │                          # incl. synthesize_stream() for sentence-chunked streaming
 │   ├── audio.py                # np.ndarray <-> WAV bytes, duration
-│   └── fake_engine.py          # deterministic test double (no model weights needed)
-├── models/tts.py             # TTSRequest/TTSResponse/PreprocessRequest/PreprocessResponse/...
+│   ├── fake_engine.py          # deterministic TTS test double (no model weights needed)
+│   ├── portrait_validator.py    # Talking Avatar: face/format/size validation on upload
+│   ├── avatar_engine.py          # Talking Avatar: the AvatarEngine ABC + EmotionConfig
+│   ├── avatar_jobs.py             # Talking Avatar: the async job manager/state machine
+│   ├── tts_cache.py                # Talking Avatar: content-addressed TTS audio cache
+│   └── avatar_engines/               # replicate_engine.py (real AI lip sync, active when
+│                                      # REPLICATE_API_TOKEN is set), stub_engine.py (free
+│                                      # fallback), hf_jobs_engine.py (alternative, planned),
+│                                      # fake_engine.py (test double) — see docs/AVATAR_ARCHITECTURE.md
+├── models/
+│   ├── tts.py                 # TTSRequest/TTSResponse/PreprocessRequest/PreprocessResponse/...
+│   └── avatar.py                # AvatarGenerationRequest/AvatarJobResponse/AvatarJobStatus/...
 └── data/
     ├── dialects.py            # the 9 real dialects + MSA, sourced as described above
     ├── voice_design.py         # the real gender/pitch/age enum, read from the installed package
+    ├── emotions.py               # the 6 Talking Avatar emotion presets (model-agnostic)
     └── pronunciation_overrides.json  # editable term -> Arabic-pronunciation overrides
 
 backend/tests/
 ├── unit/                   # segmenter, diacritizer logic, dictionary, audio_merger, request
-│                            # validation, transliterator (real espeak-ng) — all offline
-├── contract/                # API behavior against FakeEngine + mocked diacritizer — offline
-└── integration/              # real models, real MPS/CUDA/CPU inference — opt-in, RUN_MODEL_INTEGRATION_TESTS=1
+│                            # validation, transliterator (real espeak-ng), avatar job manager/
+│                            # portrait validator/emotions/cache — all offline
+├── contract/                # API behavior against FakeEngine(s) + mocked diacritizer — offline,
+│                             # incl. test_api_avatar.py
+└── integration/              # real models (real MPS/CUDA/CPU inference, opt-in via
+                                # RUN_MODEL_INTEGRATION_TESTS=1) + the one real-ffmpeg avatar test
+                                # (runs by default — see docs/AVATAR_SETUP.md)
 
 frontend/src/
-├── App.tsx                    # orchestration + state
+├── App.tsx                    # orchestration + state, incl. the TTS/Talking-Avatar tab switch
 ├── components/                 # Header, TextComposer, DialectRail, VoicePanel,
 │                               # ReferenceAudioUpload, GenerationControls, PreprocessPreview,
 │                               # AudioPlayer, ErrorBanner, StreamingDemo
+│   ├── avatar/                  # Bayan — the app's avatar/mascot component (unrelated feature,
+│   │                             # see docs/brand/avatar/AVATAR.md)
+│   └── avatar-studio/            # Talking Avatar feature UI: AvatarStudioPanel, PortraitUpload,
+│                                  # AvatarJobProgress, AvatarVideoResult
 ├── hooks/
 │   ├── useWaveformPeaks.ts      # real waveform from decoded audio, not decorative bars
 │   ├── usePreprocessPreview.ts   # debounced live "what will be spoken" preview
-│   └── useStreamingSynthesis.ts   # drives /api/tts/stream, gapless Web Audio playback
-└── api/client.ts                # typed fetch wrappers, incl. synthesizeSpeechStream (SSE)
+│   ├── useStreamingSynthesis.ts   # drives /api/tts/stream, gapless Web Audio playback
+│   └── useAvatarJob.ts             # drives POST /api/tts/avatar + its SSE progress stream
+└── api/
+    ├── client.ts                 # typed fetch wrappers, incl. synthesizeSpeechStream (SSE)
+    └── avatarClient.ts             # Talking Avatar: job create/get/cancel + SSE subscribe
 
 scripts/
 ├── samples.py               # the sample matrix shared by both scripts below
@@ -427,7 +491,12 @@ docs/
 ├── SAMPLE_GALLERY.md                   # real generated audio across MSA/dialect/hard names/
 │                                        # numbers-dates-currency-English-mix/style variants
 ├── PERFORMANCE_BENCHMARKS.md            # real measured latency + streaming TTFA, via benchmark_tts.py
-├── PRODUCTION_ARCHITECTURE.md            # recommended architecture for a real-time avatar
+├── PRODUCTION_ARCHITECTURE.md            # recommended architecture for a real-time conversational avatar
+├── AVATAR_MODEL_EVALUATION.md              # Talking Avatar: model comparison + hardware-driven selection
+├── AVATAR_ARCHITECTURE.md                   # Talking Avatar: AvatarEngine abstraction, job state machine,
+│                                              # storage/caching/security, open questions
+├── AVATAR_SETUP.md                            # Talking Avatar: running it, env vars, testing, extending
+├── brand/avatar/AVATAR.md                       # Bayan (the app's mascot) — unrelated to Talking Avatar
 └── audio/                              # phase 2's sample audio (superseded) + audio/samples/ (current)
 specs/                                   # Spec Kit planning artifacts for phases 1 and 2
 ```

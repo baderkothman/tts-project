@@ -85,6 +85,45 @@ class Settings(BaseSettings):
         "audio/webm",
     )
 
+    # --- Talking Avatar feature (services/avatar_jobs.py and friends) ---
+    # `None` resolves the same way `hf_home` does above — repo-local by
+    # default so a fresh checkout never scatters job artifacts outside the
+    # project, and so `docs/AVATAR_SETUP.md`'s cleanup instructions point at
+    # one predictable place regardless of where uvicorn was launched from.
+    avatar_storage_dir_override: str | None = None
+    max_portrait_bytes: int = 8 * 1024 * 1024  # 8 MB
+    allowed_portrait_types: tuple[str, ...] = ("image/png", "image/jpeg", "image/webp")
+
+    # Concurrency/queue limits — the "generation limits"/"concurrent-user
+    # protection" requirement. Deliberately conservative defaults: this is a
+    # single-process, single-GPU-worst-case deployment (see
+    # avatar_jobs.py's module docstring) with no autoscaling story.
+    avatar_max_concurrent_jobs: int = 1
+    avatar_max_queued_jobs: int = 10
+
+    avatar_fps: int = 25
+    # StubAvatarEngine's real ceiling is really "how long you're willing to
+    # wait for a pure-Python/PIL frame loop", not a hardware VRAM limit like
+    # a real engine would have — see docs/AVATAR_ARCHITECTURE.md's "Long
+    # audio" section for the honest reasoning behind this specific number.
+    avatar_max_audio_s: float = 120.0
+    avatar_job_timeout_s: float = 300.0
+
+    avatar_cleanup_interval_s: float = 15 * 60.0
+    avatar_job_retention_s: float = 24 * 60 * 60.0  # how long a completed/failed job's files stay downloadable
+
+    # Optional — real GPU-backed lip sync (SadTalker) via Replicate's API
+    # (services/avatar_engines/replicate_engine.py), chosen over self-hosting
+    # per docs/AVATAR_MODEL_EVALUATION.md's hardware findings. Same pattern
+    # as `openai_api_key` above: `None` means the feature quietly falls back
+    # (here, to StubAvatarEngine — see main.py) rather than the app failing
+    # to start. Real, metered cost per call — see docs/AVATAR_SETUP.md.
+    replicate_api_token: str | None = None
+
+    @property
+    def avatar_storage_dir(self) -> str:
+        return self.avatar_storage_dir_override or str(_REPO_ROOT / ".avatar_jobs")
+
 
 @lru_cache
 def get_settings() -> Settings:
